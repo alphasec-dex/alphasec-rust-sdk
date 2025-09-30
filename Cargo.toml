@@ -1,0 +1,60 @@
+[package]
+name = "alphasec-rust-sdk"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Complete Rust SDK for AlphaSec DEX - A comprehensive trading SDK with signing capabilities"
+homepage = "https://alphasec.io/"
+readme = "README.md"
+repository = "https://github.com/alphasec-dex/alphasec-rust-sdk"
+authors = ["AlphaSec Team"]
+
+[dependencies]
+# HTTP client and async runtime
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+tokio = { version = "1.0", features = ["full"] }
+
+# Serialization and JSON
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Ethereum cryptography and signing
+ethers = { version = "2.0", features = ["rustls"] }
+hex = "0.4"
+
+# Time and UUID
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Decimal arithmetic
+rust_decimal = { version = "1.0", features = ["serde"] }
+
+# Async traits
+async-trait = "0.1"
+
+# WebSocket utilities
+tokio-tungstenite = { version = "0.20", features = ["rustls-tls-native-roots"], optional = true }
+futures-util = { version = "0.3", optional = true }
+
+# Logging
+tracing = "0.1"
+
+# URL handling and encoding
+url = "2.0"
+urlencoding = "2.1"
+base64 = "0.22"
+
+# EIP-712 typed data signing (using ethers built-in support)
+# eip712 = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tracing-subscriber = "0.3"
+
+[features]
+default = ["websocket"]
+websocket = ["tokio-tungstenite", "futures-util"]
