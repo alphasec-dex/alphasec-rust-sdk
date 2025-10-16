@@ -50,6 +50,31 @@ pub struct Market {
     pub maker_fee: String,
 }
 
+/// Single level in orderbook depth (REST)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthLevel {
+    /// Price as string
+    pub price: String,
+    /// Quantity as string
+    pub quantity: String,
+}
+
+/// Depth payload from REST /api/v1/market/depth
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Depth {
+    /// Bid levels (desc)
+    pub bids: Vec<DepthLevel>,
+    /// Ask levels (asc)
+    pub asks: Vec<DepthLevel>,
+    /// Last update timestamp (ms)
+    #[serde(rename = "updatedAt")]
+    pub updated_at: u64,
+    /// Last updated ID
+    #[serde(rename = "lastUpdatedId")]
+    pub last_updated_id: i64,
+}
+
 /// Ticker information from /api/v1/market/ticker
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

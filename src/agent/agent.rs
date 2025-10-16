@@ -4,7 +4,7 @@
 //! market data, trading, and WebSocket.
 
 use crate::{
-    api::ApiClient, endpoints, error::{AlphaSecError, Result}, session_commands::{SESSION_COMMAND_DELETE, SESSION_COMMAND_UPDATE}, signer::{AlphaSecSigner, Config}, types::{account::*, market::*, orders::*, session_commands::SESSION_COMMAND_CREATE}
+    api::ApiClient, endpoints, error::{AlphaSecError, Result}, session_commands::{SESSION_COMMAND_DELETE, SESSION_COMMAND_UPDATE}, signer::{AlphaSecSigner, Config}, types::{account::*, market::{*}, orders::*, session_commands::SESSION_COMMAND_CREATE}
 };
 
 #[cfg(feature = "websocket")]
@@ -21,7 +21,7 @@ use tracing::info;
 /// 
 /// This is the primary interface for interacting with AlphaSec, combining
 /// API client, signer, and WebSocket functionality in a single struct.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Agent {
     /// API client for REST operations
     api: ApiClient,
@@ -75,7 +75,7 @@ impl Agent {
                 max_reconnect_attempts: 0, // Infinite retries
                 reconnect_delay: std::time::Duration::from_secs(1),
                 max_reconnect_delay: std::time::Duration::from_secs(30),
-                ping_interval: std::time::Duration::from_secs(60),
+                ping_interval: std::time::Duration::from_secs(10),
                 pong_timeout: std::time::Duration::from_secs(10),
                 message_queue_size: 1000,
             };
@@ -603,6 +603,10 @@ impl Agent {
     }
 
     // === Market Data Helpers ===
+    /// Get depth for specific market
+    pub async fn get_depth(&self, market: &str, limit: Option<u32>) -> Result<Depth> {
+        self.api.get_depth(market, limit).await
+    }
 
     /// Get ticker for specific market
     pub async fn get_ticker(&self, market: &str) -> Result<Ticker> {

@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::task::JoinHandle;
 use tokio::time::{interval, sleep};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
@@ -59,7 +58,7 @@ impl Default for WsConfig {
             max_reconnect_attempts: 0, // Infinite retries
             reconnect_delay: Duration::from_secs(1),
             max_reconnect_delay: Duration::from_secs(30),
-            ping_interval: Duration::from_secs(60),
+            ping_interval: Duration::from_secs(10),
             pong_timeout: Duration::from_secs(10),
             message_queue_size: 1000,
         }
@@ -110,6 +109,8 @@ enum ManagerCommand {
 }
 
 /// WebSocket manager for AlphaSec
+// Custom Clone implemented below (JoinHandle is not Clone)
+#[derive()]
 pub struct WsManager {
     /// Runtime configuration
     config: WsConfig,
@@ -122,7 +123,8 @@ pub struct WsManager {
     /// Control channel sender to drive the connection task
     control_tx: Option<mpsc::UnboundedSender<ManagerCommand>>,
     /// Join handle of the connection task (for graceful shutdown)
-    control_task: Option<JoinHandle<()>>,
+    /// NOTE: JoinHandle is not Clone, so this field is not included in Clone/Debug
+    control_task: Option<tokio::task::JoinHandle<()>>,
     /// Connection statistics
     stats: Arc<Mutex<ConnectionStats>>,
     /// Receiver given to SDK users (taken once) for incoming messages
@@ -141,6 +143,22 @@ impl std::fmt::Debug for WsManager {
             .field("control_tx", &self.control_tx.is_some())
             .field("stats", &"<Mutex>")
             .finish()
+    }
+}
+
+impl Clone for WsManager {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            state: Arc::clone(&self.state),
+            subscriptions: Arc::clone(&self.subscriptions),
+            next_id: Arc::clone(&self.next_id),
+            control_tx: self.control_tx.clone(),
+            control_task: None, // JoinHandle is not Clone; new clone has no running task
+            stats: Arc::clone(&self.stats),
+            message_rx: Arc::clone(&self.message_rx),
+            message_tx: self.message_tx.clone(),
+        }
     }
 }
 
@@ -479,7 +497,7 @@ impl WsManager {
                                             debug!("Forwarding unparseable message as generic: {}", text);
                                             let generic_msg = WebSocketMessage::Generic(value);
                                             if let Err(_) = message_tx.send(generic_msg) {
-                                                warn!("Message receiver dropped, continuing...");
+                                                warn!("Failed to send generic message, continuing...");
                                             }
                                         },
                                         Err(_) => {

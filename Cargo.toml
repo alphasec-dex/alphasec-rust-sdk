@@ -11,7 +11,7 @@ authors = ["AlphaSec Team"]
 
 [dependencies]
 # HTTP client and async runtime
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "native-tls"], default-features = false }
 tokio = { version = "1.0", features = ["full"] }
 
 # Serialization and JSON
@@ -22,8 +22,8 @@ serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
 
-# Ethereum cryptography and signing
-ethers = { version = "2.0", features = ["rustls"] }
+# Ethereum cryptography and signing (avoid rustls to prevent pulling ring)
+ethers = { version = "2.0", default-features = false }
 hex = "0.4"
 
 # Time and UUID
@@ -37,7 +37,7 @@ rust_decimal = { version = "1.0", features = ["serde"] }
 async-trait = "0.1"
 
 # WebSocket utilities
-tokio-tungstenite = { version = "0.20", features = ["rustls-tls-native-roots"], optional = true }
+tokio-tungstenite = { version = "0.20", features = ["native-tls", "connect"], default-features = false, optional = true }
 futures-util = { version = "0.3", optional = true }
 
 # Logging

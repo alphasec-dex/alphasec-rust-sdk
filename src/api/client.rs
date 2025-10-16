@@ -144,6 +144,21 @@ impl ApiClient {
         Ok(markets)
     }
 
+    /// Get depth for specific market
+    pub async fn get_depth(&self, market: &str, limit: Option<u32>) -> Result<crate::types::market::Depth> {
+        let market_id = if let Some(metadata) = &self.token_metadata {
+            metadata.market_to_market_id(market)?
+        } else {
+            market.to_string()
+        };
+        let limit_str = limit.unwrap_or(100).to_string();
+        let params = [("marketId", market_id.as_str()), ("limit", limit_str.as_str())];
+        let response = self.get("/api/v1/market/depth", Some(&params)).await?;
+        let depths: crate::types::market::Depth = serde_json::from_value(response["result"].clone())
+            .map_err(AlphaSecError::Json)?;
+        Ok(depths)
+    }
+
     /// Get all tickers
     pub async fn get_tickers(&self) -> Result<Vec<Ticker>> {
         let response = self.get("/api/v1/market/ticker", None).await?;
@@ -235,7 +250,10 @@ impl ApiClient {
     pub async fn get_sessions(&self, address: &str) -> Result<Vec<Session>> {
         let params = [("address", address)];
         let response = self.get("/api/v1/wallet/session", Some(&params)).await?;
-        
+        // info!("🔍 Sessions response: {:?}", response);
+        if response["result"].is_null() {
+            return Ok(vec![]);
+        }
         let sessions = response["result"]
             .as_array()
             .ok_or_else(|| AlphaSecError::api(500, "Invalid sessions response format"))?
@@ -359,7 +377,7 @@ impl ApiClient {
             "tx": signed_tx
         });
 
-        let response = self.post("/api/v1/wallet/order/cancel", Some(params)).await?;
+        let response = self.post("/api/v1/order/cancel", Some(params)).await?;
         
         Ok(ApiResponse {
             success: response["code"] == 200,
@@ -399,7 +417,7 @@ impl ApiClient {
             "tx": signed_tx
         });
 
-        let response = self.post("/api/v1/wallet/order/modify", Some(params)).await?;
+        let response = self.post("/api/v1/order/modify", Some(params)).await?;
         
         Ok(ApiResponse {
             success: response["code"] == 200,
@@ -419,7 +437,7 @@ impl ApiClient {
             "tx": signed_tx
         });
 
-        let response = self.post("/api/v1/wallet/order/stop", Some(params)).await?;
+        let response = self.post("/api/v1/order/stop", Some(params)).await?;
         
         Ok(ApiResponse {
             success: response["code"] == 200,
