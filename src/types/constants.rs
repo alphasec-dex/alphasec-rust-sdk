@@ -39,7 +39,10 @@ pub mod l1_contracts {
 /// Chain IDs for different networks
 pub mod chain_ids {
     /// AlphaSec L2 chain ID
-    pub const ALPHASEC_CHAIN_ID: u64 = 41001;
+    pub const ALPHASEC_TESTNET_CHAIN_ID: u64 = 41001;
+
+    /// AlphaSec L2 MAINNET CHAIN ID
+    pub const ALPHASEC_MAINNET_CHAIN_ID: u64 = 48217;
     
     /// Kaia mainnet chain ID
     pub const KAIA_MAINNET_CHAIN_ID: u64 = 8217;

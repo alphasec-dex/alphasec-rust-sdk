@@ -38,6 +38,9 @@ impl std::fmt::Display for Network {
 /// Configuration for AlphaSec client
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Chain ID
+    pub chain_id: Option<u64>,
+    
     /// API base URL
     pub api_url: Url,
     
@@ -77,14 +80,15 @@ impl Config {
     /// * `private_key` - Private key (hex string without 0x prefix)
     /// * `session_enabled` - Whether to use session mode (L2 key) or direct L1 key
     pub fn new(
-        api_url: &str,
-        network: &str,
-        l1_address: &str,
-        l1_private_key: Option<&str>,
-        l2_private_key: Option<&str>,
-        session_enabled: bool,
+        _api_url: &str,
+        _network: &str,
+        _l1_address: &str,
+        _l1_private_key: Option<&str>,
+        _l2_private_key: Option<&str>,
+        _session_enabled: bool,
+        _chain_id: Option<u64>,
     ) -> Result<Self> {
-        let api_url = Url::parse(api_url)
+        let api_url = Url::parse(_api_url)
             .map_err(|_| AlphaSecError::config("Invalid API URL"))?;
         
         // Convert HTTP URL to WebSocket URL and add /ws path
@@ -107,34 +111,41 @@ impl Config {
             url
         };
         
-        let network = Network::from_str(network)?;
+        let network = Network::from_str(_network)?;
         
         // Validate L1 address format (only if we won't derive from key below)
-        if l1_private_key.is_none() {
-            if !l1_address.starts_with("0x") || l1_address.len() != 42 {
+        if _l1_private_key.is_none() {
+            if !_l1_address.starts_with("0x") || _l1_address.len() != 42 {
                 return Err(AlphaSecError::config("Invalid L1 address format. Expected 0x followed by 40 hex characters"));
             }
         }
         
         // Parse the private key and create wallet
-        let l1_wallet = l1_private_key.and_then(|key| LocalWallet::from_str(key).ok());
-        let l2_wallet = l2_private_key.and_then(|key| LocalWallet::from_str(key).ok());
+        let l1_wallet = _l1_private_key.and_then(|key| LocalWallet::from_str(key).ok());
+        let l2_wallet = _l2_private_key.and_then(|key| LocalWallet::from_str(key).ok());
         
         // If a private key is provided, derive the address from it to avoid mismatches
         let resolved_l1_address = if let Some(ref wallet) = l1_wallet {
             format!("0x{:x}", wallet.address())
         } else {
-            l1_address.to_string()
+            _l1_address.to_string()
         };
-        
+
+        let chain_id = if _chain_id.is_some() {
+            _chain_id
+        } else {
+            None
+        };
+
         Ok(Self {
+            chain_id,
             api_url,
             ws_url,
             network,
             l1_address: resolved_l1_address,
             l1_wallet,
             l2_wallet,
-            session_enabled,
+            session_enabled: _session_enabled,
             timeout_secs: 30,
             max_retries: 3,
         })
@@ -150,6 +161,12 @@ impl Config {
     /// Set the maximum retry attempts
     pub fn with_max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = max_retries;
+        self
+    }
+    
+    /// Set the chain ID
+    pub fn with_chain_id(mut self, chain_id: u64) -> Self {
+        self.chain_id = Some(chain_id);
         self
     }
     

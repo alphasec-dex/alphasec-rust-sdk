@@ -2,7 +2,7 @@
 
 use crate::{
     error::{AlphaSecError, Result}, signer::{config::Config, normalize_price_quantity, transaction::*}, types::{
-        chain_ids::ALPHASEC_CHAIN_ID, constants::{abi::*, l1_contracts::*, ALPHASEC_NATIVE_TOKEN_ID}, l2_contracts::ALPHASEC_ORDER_CONTRACT_ADDR, dex_commands::*, eip712::*, gas::*
+        chain_ids::ALPHASEC_TESTNET_CHAIN_ID, chain_ids::ALPHASEC_MAINNET_CHAIN_ID, constants::{abi::*, l1_contracts::*, ALPHASEC_NATIVE_TOKEN_ID}, l2_contracts::ALPHASEC_ORDER_CONTRACT_ADDR, dex_commands::*, eip712::*, gas::*
     }
 };
 use base64::{self, Engine};
@@ -323,6 +323,15 @@ impl AlphaSecSigner {
         };
         let nonce = timestamp_ms.unwrap_or_else(|| self.get_alphasec_nonce());
 
+        let chain_id = if self.config.chain_id.is_some() {
+            self.config.chain_id.unwrap()
+        } else {
+            match self.config.network {
+                crate::signer::config::Network::Mainnet => ALPHASEC_MAINNET_CHAIN_ID,
+                crate::signer::config::Network::Kairos => ALPHASEC_TESTNET_CHAIN_ID,
+            }
+        };
+
         // Create EIP-1559 transaction
         let tx = Eip1559TransactionRequest {
             from: Some(wallet.address()),
@@ -333,7 +342,7 @@ impl AlphaSecSigner {
             value: Some(U256::zero()),
             nonce: Some(U256::from(nonce)),
             data: Some(data.to_vec().into()),
-            chain_id: Some(U64::from(ALPHASEC_CHAIN_ID)),
+            chain_id: Some(U64::from(chain_id)),
             access_list: Default::default(),
         };
 
@@ -567,6 +576,14 @@ impl AlphaSecSigner {
         let l1_wallet = self.config.l1_wallet.as_ref()
             .ok_or_else(|| AlphaSecError::invalid_parameter("L1 wallet is required for withdraw operations"))?;
 
+        let chain_id = if self.config.chain_id.is_some() {
+            self.config.chain_id.unwrap()
+        } else {
+            match self.config.network {
+                crate::signer::config::Network::Mainnet => ALPHASEC_MAINNET_CHAIN_ID,
+                crate::signer::config::Network::Kairos => ALPHASEC_TESTNET_CHAIN_ID,
+            }
+        };
         // All tokens have 18 decimals in AlphaSec L2
         let value_onchain_unit = (value * 1e18) as u64;
 
@@ -603,12 +620,12 @@ impl AlphaSecSigner {
                 TypedTransaction::Eip1559(mut inner) => {
                     inner.max_fee_per_gas = Some(U256::from(DEFAULT_MAX_FEE_PER_GAS));
                     inner.max_priority_fee_per_gas = Some(U256::from(DEFAULT_MAX_PRIORITY_FEE_PER_GAS));
-                    inner.chain_id = Some(U64::from(ALPHASEC_CHAIN_ID));
+                    inner.chain_id = Some(U64::from(chain_id));
                     TypedTransaction::Eip1559(inner)
                 }
                 TypedTransaction::Legacy(mut inner) => {
                     inner.gas_price = Some(U256::from(DEFAULT_GAS_PRICE));
-                    inner.chain_id = Some(U64::from(ALPHASEC_CHAIN_ID));
+                    inner.chain_id = Some(U64::from(chain_id));
                     TypedTransaction::Legacy(inner)
                 }
                 TypedTransaction::Eip2930(mut inner) => {
@@ -673,7 +690,7 @@ impl AlphaSecSigner {
                 .from(l1_address);
 
             let mut tx = call.tx;
-            tx.set_chain_id(ALPHASEC_CHAIN_ID);
+            tx.set_chain_id(chain_id);
 
             // Sign and return transaction (ensure correct L2 AlphaSec chain ID)
             let signed_tx = l1_wallet.clone().sign_transaction(&tx).await
@@ -683,12 +700,12 @@ impl AlphaSecSigner {
                 TypedTransaction::Eip1559(mut inner) => {
                     inner.max_fee_per_gas = Some(U256::from(DEFAULT_MAX_FEE_PER_GAS));
                     inner.max_priority_fee_per_gas = Some(U256::from(DEFAULT_MAX_PRIORITY_FEE_PER_GAS));
-                    inner.chain_id = Some(U64::from(ALPHASEC_CHAIN_ID));
+                    inner.chain_id = Some(U64::from(chain_id));
                     TypedTransaction::Eip1559(inner)
                 }
                 TypedTransaction::Legacy(mut inner) => {
                     inner.gas_price = Some(U256::from(DEFAULT_GAS_PRICE));
-                    inner.chain_id = Some(U64::from(ALPHASEC_CHAIN_ID));
+                    inner.chain_id = Some(U64::from(chain_id));
                     TypedTransaction::Legacy(inner)
                 }
                 TypedTransaction::Eip2930(inner) => {
@@ -716,7 +733,8 @@ mod tests {
             "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Address for first test private key
             Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), // First test private key
             None, // L2 key, no session
-            false // L1 key, no session
+            false, // L1 key, no session
+            None // Chain ID
         ).unwrap()
     }
 
