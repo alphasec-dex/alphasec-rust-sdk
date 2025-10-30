@@ -8,14 +8,17 @@ use std::collections::HashMap;
 /// Token information from /api/v1/market/tokens
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+
 pub struct Token {
     /// Token ID (internal identifier)
     pub token_id: String,
     /// Layer 1 symbol (e.g., "KAIA", "USDT")
-    pub l1_symbol: String,
+    #[serde(rename = "l1Symbol")]
+    pub symbol: String,
     /// Layer 1 contract address
+    #[serde(rename = "l1Address")]
     pub l1_address: String,
-    /// Token decimals
+    /// Token decimals (all the l2 tokens have the same decimal:18)
     #[serde(rename = "l1Decimal")]
     pub decimals: u32,
     /// Whether the token is active
@@ -127,7 +130,6 @@ pub struct Trade {
     pub created_at: u64,
     /// Is buyer maker
     pub is_buyer_maker: bool,
-    
 }
 
 /// Trade side
@@ -170,8 +172,8 @@ impl TokenMetadata {
         let mut token_id_decimal_map = HashMap::new();
 
         for token in tokens {
-            token_id_symbol_map.insert(token.token_id.clone(), token.l1_symbol.clone());
-            symbol_token_id_map.insert(token.l1_symbol.clone(), token.token_id.clone());
+            token_id_symbol_map.insert(token.token_id.clone(), token.symbol.clone());
+            symbol_token_id_map.insert(token.symbol.clone(), token.token_id.clone());
             token_id_address_map.insert(token.token_id.clone(), token.l1_address.clone());
             token_id_decimal_map.insert(token.token_id.clone(), token.decimals.to_string());
         }
@@ -188,19 +190,22 @@ impl TokenMetadata {
     pub fn market_to_market_id(&self, market: &str) -> crate::Result<String> {
         let parts: Vec<&str> = market.split('/').collect();
         if parts.len() != 2 {
-            return Err(crate::AlphaSecError::invalid_parameter(
-                format!("Invalid market format: {}. Expected format: BASE/QUOTE", market)
-            ));
+            return Err(crate::AlphaSecError::invalid_parameter(format!(
+                "Invalid market format: {}. Expected format: BASE/QUOTE",
+                market
+            )));
         }
 
         let base_symbol = parts[0];
         let quote_symbol = parts[1];
 
-        let base_token_id = self.symbol_token_id_map.get(base_symbol)
-            .ok_or_else(|| crate::AlphaSecError::not_found(format!("Base token not found: {}", base_symbol)))?;
+        let base_token_id = self.symbol_token_id_map.get(base_symbol).ok_or_else(|| {
+            crate::AlphaSecError::not_found(format!("Base token not found: {}", base_symbol))
+        })?;
 
-        let quote_token_id = self.symbol_token_id_map.get(quote_symbol)
-            .ok_or_else(|| crate::AlphaSecError::not_found(format!("Quote token not found: {}", quote_symbol)))?;
+        let quote_token_id = self.symbol_token_id_map.get(quote_symbol).ok_or_else(|| {
+            crate::AlphaSecError::not_found(format!("Quote token not found: {}", quote_symbol))
+        })?;
 
         Ok(format!("{}_{}", base_token_id, quote_token_id))
     }
@@ -209,21 +214,29 @@ impl TokenMetadata {
     pub fn market_id_to_market(&self, market_id: &str) -> crate::Result<String> {
         let parts: Vec<&str> = market_id.split('_').collect();
         if parts.len() != 2 {
-            return Err(crate::AlphaSecError::invalid_parameter(
-                format!("Invalid market ID format: {}", market_id)
-            ));
+            return Err(crate::AlphaSecError::invalid_parameter(format!(
+                "Invalid market ID format: {}",
+                market_id
+            )));
         }
 
         let base_token_id = parts[0];
         let quote_token_id = parts[1];
 
-        let base_symbol = self.token_id_symbol_map.get(base_token_id)
-            .ok_or_else(|| crate::AlphaSecError::not_found(format!("Base token ID not found: {}", base_token_id)))?;
+        let base_symbol = self.token_id_symbol_map.get(base_token_id).ok_or_else(|| {
+            crate::AlphaSecError::not_found(format!("Base token ID not found: {}", base_token_id))
+        })?;
 
-        let quote_symbol = self.token_id_symbol_map.get(quote_token_id)
-            .ok_or_else(|| crate::AlphaSecError::not_found(format!("Quote token ID not found: {}", quote_token_id)))?;
+        let quote_symbol = self
+            .token_id_symbol_map
+            .get(quote_token_id)
+            .ok_or_else(|| {
+                crate::AlphaSecError::not_found(format!(
+                    "Quote token ID not found: {}",
+                    quote_token_id
+                ))
+            })?;
 
         Ok(format!("{}/{}", base_symbol, quote_symbol))
     }
 }
-
