@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), // Your private key (no 0x prefix)
         None, // L2 key, no session
         false, // L1 key, no session
+        None // Chain ID
     )?;
 
     // Create Agent
@@ -42,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(tokens) => {
             info!("✅ Available tokens: {}", tokens.len());
             for token in tokens.iter().take(5) {  // Show first 5
-                info!("  - {} (ID: {})", token.l1_symbol, token.token_id);
+                info!("  - {} (ID: {})", token.symbol, token.token_id);
             }
         }
         Err(e) => error!("❌ Failed to get tokens: {}", e),

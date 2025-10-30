@@ -15,6 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
         Some("0x3a27159a9c2fc4f837a086f24bcf80f5f270e9d1224c6953859656f94c2fe2f3"), // L2 key, no session
         false, // L1 key, no session
+        None // Chain ID
     ).unwrap();
 
     let agent = Agent::new(config).await.unwrap();

@@ -12,6 +12,7 @@ authors = ["AlphaSec Team"]
 [dependencies]
 # HTTP client and async runtime
 reqwest = { version = "0.12", features = ["json", "native-tls"], default-features = false }
+
 tokio = { version = "1.0", features = ["full"] }
 
 # Serialization and JSON

@@ -117,7 +117,6 @@ impl ApiClient {
             request = request.body(params.to_string());
         }
         
-        info!("🔍 Request: {:?}", request);
         let response = request.send().await?;
         
         if response.status().is_success() {
@@ -508,6 +507,7 @@ impl ApiClient {
         })
     }
 
+    /// update the expiration of a existing session
     pub async fn update_session(&self, session_id: &str, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
             return Err(AlphaSecError::auth("Signer required for session operations"));
@@ -528,6 +528,7 @@ impl ApiClient {
         })
     }
     
+    /// delete the existing session
     pub async fn delete_session(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
             return Err(AlphaSecError::auth("Signer required for session operations"));

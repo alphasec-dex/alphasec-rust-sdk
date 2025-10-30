@@ -8,19 +8,21 @@ use tracing::{info, error, Level};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .init();
 
     info!("🚀 Starting WebSocket channel example");
 
     // Create configuration for Kairos testnet
     let config = Config::new(
-        "https://api-testnet.alphasec.trade",
+        // "https://api-testnet.alphasec.trade",
+        "https://api-dev.dexor.trade",
         "kairos",
         "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c",
         Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"),
         None, // L2 key, no session
         false, // L1 key, no session
+        None // Chain ID
     )?;
 
     // Create agent
@@ -35,9 +37,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Failed to get message receiver");
 
     // Subscribe to multiple channels
-    let sub1 = agent.subscribe("ticker@KAIA/USDT").await?;
-    let sub2 = agent.subscribe("trade@KAIA/USDT").await?;
-    let sub3 = agent.subscribe("depth@KAIA/USDT").await?;
+    // let sub1 = agent.subscribe("ticker@KAIA/USDT").await?;
+    let sub2 = agent.subscribe("trade@BTC/USDT").await?;
+    let sub3 = agent.subscribe("depth@BTC/USDT").await?;
     let sub4 = agent.subscribe("userEvent@0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c").await?;
 
     // info!("📡 Subscribed to channels: ticker={}, trades={}, depth={}, userEvent={}", sub1, sub2, sub3, sub4);
@@ -97,11 +99,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Let it run for a while
-    sleep(Duration::from_secs(30)).await;
+    sleep(Duration::from_secs(200)).await;
 
     // Unsubscribe from some channels
-    info!("📡 Unsubscribing from ticker...");
-    agent.unsubscribe(sub1).await?;
+    // info!("📡 Unsubscribing from ticker...");
+    // agent.unsubscribe(sub1).await?;
     info!("📡 Unsubscribing from trade...");
     agent.unsubscribe(sub2).await?;
     info!("📡 Unsubscribing from depth...");
