@@ -160,27 +160,32 @@ pub struct UserEventParams {
     pub result: UserEventResult,
 }
 
-/// User event result
+/// Common fields for any user event
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserEventResult {
+pub struct UserEventBase {
     /// Event type
     #[serde(rename = "eventType")]
-    pub event_type: String, // "NEW", "TRADE", "CANCELED", etc.
+    pub event_type: String,
     /// Event time
     #[serde(rename = "eventTime")]
     pub event_time: i64,
+    /// Block number
+    #[serde(rename = "blockNumber")]
+    pub block_number: i64,
     /// Account address
     #[serde(rename = "accountAddress")]
     pub account_address: String,
-    /// Account ID (optional, for backward compatibility)
-    #[serde(rename = "accountId")]
-    pub account_id: Option<i64>,
-    /// Order ID
-    #[serde(rename = "orderId")]
-    pub order_id: String,
     /// Transaction hash
     #[serde(rename = "txHash")]
     pub tx_hash: String,
+}
+
+/// Fields specific to ORDER topic
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderFields {
+    /// Order ID
+    #[serde(rename = "orderId")]
+    pub order_id: String,
     /// Market ID
     #[serde(rename = "marketId")]
     pub market_id: String,
@@ -231,6 +236,65 @@ pub struct UserEventResult {
     pub is_maker: bool,
 }
 
+/// Fields specific to ACCOUNT topic
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountFields {
+    /// Token ID
+    #[serde(rename = "tokenId")]
+    pub token_id: String,
+    /// Asset amount
+    pub amount: String,
+    /// Source address (for TRANSFER only)
+    #[serde(rename = "fromAddress")]
+    pub from_address: Option<String>,
+    /// Destination address (for TRANSFER only)
+    #[serde(rename = "toAddress")]
+    pub to_address: Option<String>,
+}
+
+/// User event result: discriminated by "topic", flattened payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "topic")]
+pub enum UserEventResult {
+    /// ORDER topic event
+    #[serde(rename = "ORDER", alias = "order")]
+    Order {
+        /// Common event fields
+        #[serde(flatten)]
+        base: UserEventBase,
+        /// Order-specific fields
+        #[serde(flatten)]
+        order: OrderFields,
+    },
+    /// ACCOUNT topic event
+    #[serde(rename = "ACCOUNT", alias = "account")]
+    Account {
+        /// Common event fields
+        #[serde(flatten)]
+        base: UserEventBase,
+        /// Account-specific fields
+        #[serde(flatten)]
+        account: AccountFields,
+    },
+}
+
+impl UserEventResult {
+    /// Returns the topic as a constant string.
+    pub fn topic(&self) -> &'static str {
+        match self {
+            UserEventResult::Order { .. } => "ORDER",
+            UserEventResult::Account { .. } => "ACCOUNT",
+        }
+    }
+
+    /// Returns the common base fields for any user event.
+    pub fn base(&self) -> &UserEventBase {
+        match self {
+            UserEventResult::Order { base, .. } => base,
+            UserEventResult::Account { base, .. } => base,
+        }
+    }
+}
 /// WebSocket subscription request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionRequest {

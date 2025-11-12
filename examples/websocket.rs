@@ -79,9 +79,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 alphasec_rust_sdk::types::WebSocketMessage::UserEventMsg { params, .. } => {
-                    info!("👤 User event #{}: channel={}, type={}, order={}, status={}", 
-                          message_count, params.channel, params.result.event_type, 
-                          params.result.order_id, params.result.status);
+                    match &params.result {
+                        alphasec_rust_sdk::types::UserEventResult::Order { base, order } => {
+                            info!("👤 User event (ORDER) #{}: channel={}, topic={}, type={}, order_id={}, status={}, market={}, side={}, last_price={}, last_qty={}, trade_id={}", 
+                                  message_count, params.channel, params.result.topic(), base.event_type, 
+                                  order.order_id, order.status, order.market_id, order.side, order.last_price, order.last_qty, order.trade_id);
+                        }
+                        alphasec_rust_sdk::types::UserEventResult::Account { base, account } => {
+                            info!("👤 User event (ACCOUNT) #{}: channel={}, topic={}, type={}, token_id={}, amount={}, from={:?}, to={:?}", 
+                                  message_count, params.channel, params.result.topic(), base.event_type, 
+                                  account.token_id, account.amount, account.from_address, account.to_address);
+                        }
+                    }
                 }
                 alphasec_rust_sdk::types::WebSocketMessage::Generic(value) => {
                     info!("🔧 Generic message #{}: {:?}", message_count, value);
