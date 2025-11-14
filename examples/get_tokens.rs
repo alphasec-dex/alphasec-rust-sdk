@@ -1,9 +1,9 @@
 //! Get tokens example
-//! 
+//!
 //! This example demonstrates how to fetch available tokens only
 
 use alphasec_rust_sdk::{Agent, Config};
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,11 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",  // Your L1 address
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Your L1 address
         Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), // Your private key (no 0x prefix)
-        None, // L2 key, no session
+        None,  // L2 key, no session
         false, // L1 key, no session
-        None // Chain ID
+        None,  // Chain ID
     )?;
 
     // Create Agent
@@ -32,8 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(tokens) => {
             info!("✅ Available tokens: {}", tokens.len());
             for token in tokens.iter() {
-                info!("  - {} (ID: {}, Address: {})", 
-                      token.symbol, token.token_id, token.l1_address);
+                info!(
+                    "  - {} (ID: {}, Address: {})",
+                    token.symbol, token.token_id, token.l1_address
+                );
             }
         }
         Err(e) => {

@@ -1,21 +1,21 @@
 //! # AlphaSec Rust SDK
-//! 
+//!
 //! A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX.
-//! 
+//!
 //! ## Features
-//! 
+//!
 //! - **Complete Trading API**: All order operations with EIP-712 signing
 //! - **Agent Architecture**: Unified interface combining API, WebSocket, and Signer
 //! - **Session Management**: L1 wallet authentication with L2 session creation
 //! - **WebSocket Streaming**: Real-time market data and user events
 //! - **Type Safety**: Comprehensive type definitions with serde support
 //! - **Error Handling**: Robust error types for all operations
-//! 
+//!
 //! ## Quick Start
-//! 
+//!
 //! ```rust,no_run
 //! use alphasec_rust_sdk::{Agent, Config, OrderSide, OrderType, OrderMode};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = Config::new(

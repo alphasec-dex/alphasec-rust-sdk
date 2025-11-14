@@ -1,9 +1,9 @@
 //! Get balance example
-//! 
+//!
 //! This example demonstrates how to fetch account balance only
 
 use alphasec_rust_sdk::{Agent, Config};
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,11 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",  // Your L1 address
+        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Your L1 address
         Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), // Your private key (no 0x prefix)
-        None, // L2 key, no session
+        None,  // L2 key, no session
         false, // L1 key, no session
-        None // Chain ID
+        None,  // Chain ID
     )?;
 
     // Create Agent
@@ -33,12 +33,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get balance information
     match agent.get_balance(address).await {
         Ok(balances) => {
-            info!("✅ Total tokens: {}", balances.len());
-            for balance in balances.iter().take(10) {  // Show first 10
-                    let token_id = balance.token_id.clone();
-                    let locked = balance.locked.as_deref().unwrap_or("0");
-                    let unlocked = balance.unlocked.as_deref().unwrap_or("0");
-                    info!("  - {} (ID: {}): Locked={}, Unlocked={}", token_id, balance.token_id, locked, unlocked);
+            for balance in balances.balances.iter().take(10) {
+                // Show first 10
+                let token_id = balance.token_id.clone();
+                let locked = balance.locked.as_deref().unwrap_or("0");
+                let unlocked = balance.unlocked.as_deref().unwrap_or("0");
+                info!(
+                    "  - {} (ID: {}): Locked={}, Unlocked={}",
+                    token_id, balance.token_id, locked, unlocked
+                );
             }
         }
         Err(e) => error!("❌ Failed to get balance: {}", e),

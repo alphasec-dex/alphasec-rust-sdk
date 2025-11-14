@@ -166,7 +166,7 @@ impl WsManager {
     /// Create a new WebSocket manager
     pub fn new(config: WsConfig) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         Self {
             config,
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
@@ -195,17 +195,22 @@ impl WsManager {
         let state = Arc::clone(&self.state);
         let subscriptions = Arc::clone(&self.subscriptions);
         let stats = Arc::clone(&self.stats);
-        let message_tx = self.message_tx.as_ref().expect("message_tx not initialized").clone();
+        let message_tx = self
+            .message_tx
+            .as_ref()
+            .expect("message_tx not initialized")
+            .clone();
 
         let handle = tokio::spawn(async move {
-            Self::connection_task(config, state, subscriptions, control_rx, message_tx, stats).await;
+            Self::connection_task(config, state, subscriptions, control_rx, message_tx, stats)
+                .await;
         });
         self.control_task = Some(handle);
 
         // Send connect command
-        control_tx.send(ManagerCommand::Connect).map_err(|_| {
-            crate::error::AlphaSecError::network("Failed to send connect command")
-        })?;
+        control_tx
+            .send(ManagerCommand::Connect)
+            .map_err(|_| crate::error::AlphaSecError::network("Failed to send connect command"))?;
 
         info!("🚀 WebSocket manager started");
         Ok(())
@@ -242,9 +247,11 @@ impl WsManager {
         }
 
         if let Some(ref control_tx) = self.control_tx {
-            control_tx.send(ManagerCommand::Subscribe { id, channel }).map_err(|_| {
-                crate::error::AlphaSecError::network("Failed to send subscribe command")
-            })?;
+            control_tx
+                .send(ManagerCommand::Subscribe { id, channel })
+                .map_err(|_| {
+                    crate::error::AlphaSecError::network("Failed to send subscribe command")
+                })?;
         }
 
         Ok(id)
@@ -264,7 +271,10 @@ impl WsManager {
 
         if removed {
             if let Some(ref control_tx) = self.control_tx {
-                let _ = control_tx.send(ManagerCommand::Unsubscribe { id, channel: channel.unwrap() });
+                let _ = control_tx.send(ManagerCommand::Unsubscribe {
+                    id,
+                    channel: channel.unwrap(),
+                });
             }
         }
 
@@ -361,7 +371,7 @@ impl WsManager {
     ) {
         // Update state to connecting
         *state.write().await = ConnectionState::Connecting;
-        
+
         // Update stats
         {
             let mut stats_guard = stats.lock().await;
@@ -385,23 +395,26 @@ impl WsManager {
             Ok((ws_stream, _)) => ws_stream,
             Err(e) => {
                 error!("❌ Failed to connect to WebSocket: {}", e);
-                
+
                 // Handle reconnection
                 *reconnect_attempts += 1;
-                if config.max_reconnect_attempts > 0 && *reconnect_attempts >= config.max_reconnect_attempts {
+                if config.max_reconnect_attempts > 0
+                    && *reconnect_attempts >= config.max_reconnect_attempts
+                {
                     error!("❌ Max reconnection attempts reached");
                     *state.write().await = ConnectionState::Disconnected;
                     return;
                 }
 
                 *state.write().await = ConnectionState::Reconnecting;
-                info!("🔄 Reconnecting in {:?} (attempt {})", current_reconnect_delay, *reconnect_attempts);
-                
-                sleep(*current_reconnect_delay).await;
-                *current_reconnect_delay = std::cmp::min(
-                    *current_reconnect_delay * 2,
-                    config.max_reconnect_delay,
+                info!(
+                    "🔄 Reconnecting in {:?} (attempt {})",
+                    current_reconnect_delay, *reconnect_attempts
                 );
+
+                sleep(*current_reconnect_delay).await;
+                *current_reconnect_delay =
+                    std::cmp::min(*current_reconnect_delay * 2, config.max_reconnect_delay);
                 return;
             }
         };
@@ -449,7 +462,7 @@ impl WsManager {
                     match ws_msg {
                         Some(Ok(Message::Text(text))) => {
                             debug!("📨 Received: {}", text);
-                            
+
                             // Update stats
                             {
                                 let mut stats_guard = stats.lock().await;
@@ -526,7 +539,7 @@ impl WsManager {
                         _ => {}
                     }
                 },
-                
+
                 // Handle outgoing messages
                 Some(msg) = outgoing_rx.recv() => {
                     debug!("Sending: {}", msg);
@@ -534,14 +547,14 @@ impl WsManager {
                         error!("❌ Failed to send message: {}", e);
                         break;
                     }
-                    
+
                     // Update stats
                     {
                         let mut stats_guard = stats.lock().await;
                         stats_guard.messages_sent += 1;
                     }
                 },
-                
+
                 // Handle control commands
                 Some(cmd) = control_rx.recv() => {
                     match cmd {
@@ -575,7 +588,7 @@ impl WsManager {
                         _ => {}
                     }
                 },
-                
+
                 // Handle ping/pong health check
                 _ = ping_interval.tick() => {
                     // Check if we received a pong recently
@@ -583,7 +596,7 @@ impl WsManager {
                         error!("❌ Pong timeout, connection seems dead");
                         break;
                     }
-                    
+
                     // Send ping
                     debug!("Sending ping");
                     if let Err(e) = ws_sink.send(Message::Ping(vec![])).await {
@@ -597,7 +610,7 @@ impl WsManager {
         // Connection ended
         info!("WebSocket connection ended");
         *state.write().await = ConnectionState::Disconnected;
-        
+
         // Update stats
         {
             let mut stats_guard = stats.lock().await;

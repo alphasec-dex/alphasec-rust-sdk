@@ -16,6 +16,15 @@ pub struct Balance {
     #[serde(default)]
     pub unlocked: Option<String>,
 }
+/// Account balances information from /api/v1/wallet/balance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Balances {
+    /// Balances
+    pub balances: Vec<Balance>,
+    /// Block number
+    pub block_number: u64,
+}
 
 impl Balance {
     /// Get available balance as Decimal (converted from wei)

@@ -7,15 +7,15 @@ fn truncate_to_precision(value: f64, precision: u64) -> f64 {
 }
 
 /// Normalize price and quantity values by truncating them to appropriate precision
-/// 
+///
 /// The precision is determined based on the magnitude of the values:
 /// - Price precision: 0-8 decimal places depending on price range
 /// - Quantity precision: 0-5 decimal places depending on quantity range
-/// 
+///
 /// # Arguments
 /// * `price` - The price value to normalize (must be non-negative)
 /// * `quantity` - The quantity value to normalize (must be non-negative)
-/// 
+///
 /// # Returns
 /// * `Ok((rounded_price, rounded_quantity))` - The normalized values
 /// * `Err(AlphaSecError)` - If price or quantity is negative
@@ -53,10 +53,12 @@ pub fn normalize_price_quantity(price: f64, quantity: f64) -> Result<(f64, f64),
     }
 
     if price < 0.0 {
-         return Err(AlphaSecError::invalid_parameter("Price cannot be negative"));
+        return Err(AlphaSecError::invalid_parameter("Price cannot be negative"));
     }
     if quantity < 0.0 {
-        return Err(AlphaSecError::invalid_parameter("Quantity cannot be negative"));
+        return Err(AlphaSecError::invalid_parameter(
+            "Quantity cannot be negative",
+        ));
     }
 
     let price_precision = get_price_precision(price);

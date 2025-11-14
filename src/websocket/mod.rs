@@ -4,4 +4,4 @@
 pub mod manager;
 
 #[cfg(feature = "websocket")]
-pub use manager::{WsManager, WsConfig, ConnectionState};
+pub use manager::{ConnectionState, WsConfig, WsManager};

@@ -3,7 +3,7 @@
 use crate::{
     error::{AlphaSecError, Result},
     signer::{AlphaSecSigner, Config},
-    types::{market::*, orders::*, account::*, api::*},
+    types::{account::*, api::*, market::*, orders::*},
 };
 use reqwest::Client as HttpClient;
 use serde_json::Value;
@@ -69,7 +69,7 @@ impl ApiClient {
         } else {
             format!("{}{}", self.base_url, path)
         };
-        
+
         if let Some(params) = params {
             if !params.is_empty() {
                 url.push('?');
@@ -77,8 +77,9 @@ impl ApiClient {
                     if i > 0 {
                         url.push('&');
                     }
-                    url.push_str(&format!("{}={}", 
-                        urlencoding::encode(key), 
+                    url.push_str(&format!(
+                        "{}={}",
+                        urlencoding::encode(key),
                         urlencoding::encode(value)
                     ));
                 }
@@ -87,7 +88,7 @@ impl ApiClient {
 
         debug!("GET {}", url);
         let response = self.http_client.get(&url).send().await?;
-        
+
         if response.status().is_success() {
             let json: Value = response.json().await?;
             Ok(json)
@@ -107,18 +108,19 @@ impl ApiClient {
         } else {
             format!("{}{}", self.base_url, path)
         };
-        
+
         debug!("POST {} with params: {:?}", url, params);
-        let mut request = self.http_client
+        let mut request = self
+            .http_client
             .post(&url)
             .header("Content-Type", "application/json");
-        
+
         if let Some(params) = params {
             request = request.body(params.to_string());
         }
-        
+
         let response = request.send().await?;
-        
+
         if response.status().is_success() {
             let json: Value = response.json().await?;
             Ok(json)
@@ -144,17 +146,24 @@ impl ApiClient {
     }
 
     /// Get depth for specific market
-    pub async fn get_depth(&self, market: &str, limit: Option<u32>) -> Result<crate::types::market::Depth> {
+    pub async fn get_depth(
+        &self,
+        market: &str,
+        limit: Option<u32>,
+    ) -> Result<crate::types::market::Depth> {
         let market_id = if let Some(metadata) = &self.token_metadata {
             metadata.market_to_market_id(market)?
         } else {
             market.to_string()
         };
         let limit_str = limit.unwrap_or(100).to_string();
-        let params = [("marketId", market_id.as_str()), ("limit", limit_str.as_str())];
+        let params = [
+            ("marketId", market_id.as_str()),
+            ("limit", limit_str.as_str()),
+        ];
         let response = self.get("/api/v1/market/depth", Some(&params)).await?;
-        let depths: crate::types::market::Depth = serde_json::from_value(response["result"].clone())
-            .map_err(AlphaSecError::Json)?;
+        let depths: crate::types::market::Depth =
+            serde_json::from_value(response["result"].clone()).map_err(AlphaSecError::Json)?;
         Ok(depths)
     }
 
@@ -180,16 +189,20 @@ impl ApiClient {
 
         let params = [("marketId", market_id.as_str())];
         let response = self.get("/api/v1/market/ticker", Some(&params)).await?;
-        
+
         let ticker_array = response["result"]
             .as_array()
             .ok_or_else(|| AlphaSecError::api(500, "Invalid ticker response format"))?;
-        
+
         if ticker_array.is_empty() {
-            return Err(AlphaSecError::not_found(format!("Ticker not found for market: {}", market)));
+            return Err(AlphaSecError::not_found(format!(
+                "Ticker not found for market: {}",
+                market
+            )));
         }
-        
-        let ticker = serde_json::from_value(ticker_array[0].clone()).map_err(AlphaSecError::Json)?;
+
+        let ticker =
+            serde_json::from_value(ticker_array[0].clone()).map_err(AlphaSecError::Json)?;
         Ok(ticker)
     }
 
@@ -219,7 +232,7 @@ impl ApiClient {
             ("limit", limit_str.as_str()),
         ];
         let response = self.get("/api/v1/market/trades", Some(&params)).await?;
-        
+
         let trades = response["result"]
             .as_array()
             .ok_or_else(|| AlphaSecError::api(500, "Invalid trades response format"))?
@@ -232,16 +245,11 @@ impl ApiClient {
     // === Account Information API ===
 
     /// Get account balance
-    pub async fn get_balance(&self, address: &str) -> Result<Vec<Balance>> {
+    pub async fn get_balance(&self, address: &str) -> Result<Balances> {
         let params = [("address", address)];
         let response = self.get("/api/v1/wallet/balance", Some(&params)).await?;
-        
-        let balances = response["result"]
-            .as_array()
-            .ok_or_else(|| AlphaSecError::api(500, "Invalid balance response format"))?
-            .iter()
-            .map(|balance| serde_json::from_value(balance.clone()).map_err(AlphaSecError::Json))
-            .collect::<Result<Vec<Balance>>>()?;
+        let balances: Balances =
+            serde_json::from_value(response["result"].clone()).map_err(AlphaSecError::Json)?;
         Ok(balances)
     }
 
@@ -265,7 +273,7 @@ impl ApiClient {
     /// Get open orders
     pub async fn get_open_orders(&self, query: &OrdersQuery) -> Result<Vec<Order>> {
         let mut params = vec![("address", query.address.as_str())];
-        
+
         let market_id;
         if let Some(ref market) = query.market {
             market_id = if let Some(metadata) = &self.token_metadata {
@@ -275,18 +283,18 @@ impl ApiClient {
             };
             params.push(("marketId", market_id.as_str()));
         }
-        
+
         let limit_str;
         if let Some(limit) = query.limit {
             limit_str = limit.to_string();
             params.push(("limit", limit_str.as_str()));
         }
-        
+
         let response = self.get("/api/v1/order/open", Some(&params)).await?;
         if response["result"].is_null() {
             return Ok(vec![]);
         }
-        
+
         let orders = response["result"]
             .as_array()
             .ok_or_else(|| AlphaSecError::api(500, "Invalid open orders response format"))?
@@ -299,7 +307,7 @@ impl ApiClient {
     /// Get order history
     pub async fn get_filled_canceled_orders(&self, query: &OrdersQuery) -> Result<Vec<Order>> {
         let mut params = vec![("address", query.address.as_str())];
-        
+
         let market_id;
         if let Some(ref market) = query.market {
             market_id = if let Some(metadata) = &self.token_metadata {
@@ -309,19 +317,19 @@ impl ApiClient {
             };
             params.push(("marketId", market_id.as_str()));
         }
-        
+
         let limit_str;
         if let Some(limit) = query.limit {
             limit_str = limit.to_string();
             params.push(("limit", limit_str.as_str()));
         }
-        
+
         let response = self.get("/api/v1/order/", Some(&params)).await?;
-        
+
         if response["result"].is_null() {
             return Ok(vec![]);
         }
-        
+
         let orders = response["result"]
             .as_array()
             .ok_or_else(|| AlphaSecError::api(500, "Invalid orders response format"))?
@@ -336,7 +344,8 @@ impl ApiClient {
         let path = format!("/api/v1/order/{}", order_id);
         match self.get(&path, None).await {
             Ok(response) => {
-                let order = serde_json::from_value(response["result"].clone()).map_err(AlphaSecError::Json)?;
+                let order = serde_json::from_value(response["result"].clone())
+                    .map_err(AlphaSecError::Json)?;
                 Ok(Some(order))
             }
             Err(AlphaSecError::Api { code: 404, .. }) => Ok(None),
@@ -349,7 +358,9 @@ impl ApiClient {
     /// Submit an order
     pub async fn order(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for trading operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for trading operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -357,19 +368,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/order", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Cancel an order
     pub async fn cancel(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for trading operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for trading operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -377,19 +396,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/order/cancel", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Cancel all orders
     pub async fn cancel_all(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for trading operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for trading operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -397,19 +424,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/order/cancel/all", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Modify an order
     pub async fn modify(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for trading operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for trading operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -417,19 +452,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/order/modify", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Submit a stop order
     pub async fn stop_order(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for trading operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for trading operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -437,19 +480,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/order/stop", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Value transfer (native token)
     pub async fn native_transfer(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for transfer operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for transfer operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -457,19 +508,27 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/wallet/transfer", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Token transfer
     pub async fn token_transfer(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for transfer operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for transfer operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -477,19 +536,31 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/wallet/transfer", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// Create a session
-    pub async fn create_session(&self, session_id: &str, signed_tx: &str) -> Result<ApiResponse<Value>> {
+    pub async fn create_session(
+        &self,
+        session_id: &str,
+        signed_tx: &str,
+    ) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for session operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for session operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -498,19 +569,31 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/wallet/session", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 
     /// update the expiration of a existing session
-    pub async fn update_session(&self, session_id: &str, signed_tx: &str) -> Result<ApiResponse<Value>> {
+    pub async fn update_session(
+        &self,
+        session_id: &str,
+        signed_tx: &str,
+    ) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for session operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for session operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -518,39 +601,59 @@ impl ApiClient {
             "tx": signed_tx
         });
 
-        let response = self.post("/api/v1/wallet/session/update", Some(params)).await?;
-        
+        let response = self
+            .post("/api/v1/wallet/session/update", Some(params))
+            .await?;
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
-    
+
     /// delete the existing session
     pub async fn delete_session(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for session operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for session operations",
+            ));
         }
 
         let params = serde_json::json!({
             "tx": signed_tx
         });
 
-        let response = self.post("/api/v1/wallet/session/delete", Some(params)).await?;
-        
+        let response = self
+            .post("/api/v1/wallet/session/delete", Some(params))
+            .await?;
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
     /// Withdraw token
     pub async fn withdraw_token(&self, signed_tx: &str) -> Result<ApiResponse<Value>> {
         if self.signer.is_none() {
-            return Err(AlphaSecError::auth("Signer required for withdraw operations"));
+            return Err(AlphaSecError::auth(
+                "Signer required for withdraw operations",
+            ));
         }
 
         let params = serde_json::json!({
@@ -558,12 +661,18 @@ impl ApiClient {
         });
 
         let response = self.post("/api/v1/wallet/withdraw", Some(params)).await?;
-        
+
         Ok(ApiResponse {
             success: response["code"] == 200,
-            code: response.get("code").and_then(|v| v.as_i64()).map(|v| v as i32),
+            code: response
+                .get("code")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
             result: response.get("result").cloned(),
-            error: response.get("errMsg").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            error: response
+                .get("errMsg")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         })
     }
 }

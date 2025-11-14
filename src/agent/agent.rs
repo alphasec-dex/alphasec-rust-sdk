@@ -1,14 +1,19 @@
 //! Main Agent class for AlphaSec SDK
-//! 
-//! Provides a unified interface for all AlphaSec operations including 
+//!
+//! Provides a unified interface for all AlphaSec operations including
 //! market data, trading, and WebSocket.
 
 use crate::{
-    api::ApiClient, endpoints, error::{AlphaSecError, Result}, session_commands::{SESSION_COMMAND_DELETE, SESSION_COMMAND_UPDATE}, signer::{AlphaSecSigner, Config}, types::{account::*, market::{*}, orders::*, session_commands::SESSION_COMMAND_CREATE}
+    api::ApiClient,
+    endpoints,
+    error::{AlphaSecError, Result},
+    session_commands::{SESSION_COMMAND_DELETE, SESSION_COMMAND_UPDATE},
+    signer::{AlphaSecSigner, Config},
+    types::{account::*, market::*, orders::*, session_commands::SESSION_COMMAND_CREATE},
 };
 
 #[cfg(feature = "websocket")]
-use crate::websocket::{WsManager, WsConfig};
+use crate::websocket::{WsConfig, WsManager};
 
 use ethers::{providers::Middleware, signers::LocalWallet, types::U64};
 #[cfg(feature = "websocket")]
@@ -18,7 +23,7 @@ use tokio::time::{sleep, Duration};
 use tracing::info;
 
 /// Main Agent for AlphaSec operations
-/// 
+///
 /// This is the primary interface for interacting with AlphaSec, combining
 /// API client, signer, and WebSocket functionality in a single struct.
 #[derive(Debug, Clone)]
@@ -36,16 +41,16 @@ pub struct Agent {
 
 impl Agent {
     /// Create a new Agent
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `config` - Configuration including API URL, network, and wallet keys
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```rust,no_run
     /// use alphasec_rust_sdk::{Agent, Config};
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     let config = Config::new(
@@ -64,10 +69,10 @@ impl Agent {
     pub async fn new(config: Config) -> Result<Self> {
         let signer = AlphaSecSigner::new(config.clone());
         let mut api = ApiClient::new(&config, Some(signer.clone()))?;
-        
+
         // Initialize token metadata
         api.initialize_metadata().await?;
-        
+
         #[cfg(feature = "websocket")]
         let ws = {
             let ws_config = WsConfig {
@@ -81,9 +86,12 @@ impl Agent {
             };
             Some(WsManager::new(ws_config))
         };
-        
-        info!("✅ AlphaSec Agent initialized for network: {}", config.network);
-        
+
+        info!(
+            "✅ AlphaSec Agent initialized for network: {}",
+            config.network
+        );
+
         Ok(Self {
             api,
             signer,
@@ -115,27 +123,27 @@ impl Agent {
     }
 
     /// # Arguments
-    /// 
+    ///
     /// * `channel` - Channel in format 'type@target':
     ///   - 'trade@KAIA/USDT' for trade data
     ///   - 'ticker@KAIA/USDT' for ticker data
     ///   - 'depth@KAIA/USDT' for order book
     ///   - 'userEvent@0x123...' for user events
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Subscription ID for later unsubscribing
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use alphasec_rust_sdk::{Agent, Config};
-    /// 
+    ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     let config = Config::new(
     ///         "https://api-testnet.alphasec.trade",
-    ///         "kairos", 
+    ///         "kairos",
     ///         "0x1234567890123456789012345678901234567890",
     ///         Some("l1_private_key"),
     ///         None,
@@ -160,9 +168,10 @@ impl Agent {
     #[cfg(feature = "websocket")]
     pub async fn subscribe(&self, channel: &str) -> Result<i32> {
         if !channel.contains('@') {
-            return Err(AlphaSecError::invalid_parameter(
-                format!("Channel format should be 'type@target', got: {}", channel)
-            ));
+            return Err(AlphaSecError::invalid_parameter(format!(
+                "Channel format should be 'type@target', got: {}",
+                channel
+            )));
         }
 
         let parts: Vec<&str> = channel.split('@').collect();
@@ -184,9 +193,10 @@ impl Agent {
                 format!("userEvent@{}", target)
             }
             _ => {
-                return Err(AlphaSecError::invalid_parameter(
-                    format!("Unsupported channel type: {}. Use 'trade', 'ticker', 'depth', or 'userEvent'", channel_type)
-                ));
+                return Err(AlphaSecError::invalid_parameter(format!(
+                    "Unsupported channel type: {}. Use 'trade', 'ticker', 'depth', or 'userEvent'",
+                    channel_type
+                )));
             }
         };
 
@@ -212,7 +222,9 @@ impl Agent {
     /// This can only be called once. After calling this, all WebSocket messages
     /// will be sent to the returned receiver.
     #[cfg(feature = "websocket")]
-    pub async fn take_message_receiver(&self) -> Option<mpsc::UnboundedReceiver<crate::types::WebSocketMessage>> {
+    pub async fn take_message_receiver(
+        &self,
+    ) -> Option<mpsc::UnboundedReceiver<crate::types::WebSocketMessage>> {
         if let Some(ref ws) = self.ws {
             ws.take_message_receiver().await
         } else {
@@ -237,9 +249,9 @@ impl Agent {
     // === Trading API Helpers ===
 
     /// Place an order
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `market` - Market symbol (e.g., "KAIA/USDT")
     /// * `side` - Order side (Buy or Sell)
     /// * `price` - Price in wei
@@ -269,16 +281,24 @@ impl Agent {
 
         let base_symbol = market_parts[0];
         let quote_symbol = market_parts[1];
-        
+
         // Convert symbols to token_ids using the metadata
-        let token_metadata = self.api.token_metadata()
+        let token_metadata = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?;
-        let base_token_id = token_metadata.symbol_token_id_map
+        let base_token_id = token_metadata
+            .symbol_token_id_map
             .get(base_symbol)
-            .ok_or_else(|| AlphaSecError::config(format!("Unknown base token symbol: {}", base_symbol)))?;
-        let quote_token_id = token_metadata.symbol_token_id_map
+            .ok_or_else(|| {
+                AlphaSecError::config(format!("Unknown base token symbol: {}", base_symbol))
+            })?;
+        let quote_token_id = token_metadata
+            .symbol_token_id_map
             .get(quote_symbol)
-            .ok_or_else(|| AlphaSecError::config(format!("Unknown quote token symbol: {}", quote_symbol)))?;
+            .ok_or_else(|| {
+                AlphaSecError::config(format!("Unknown quote token symbol: {}", quote_symbol))
+            })?;
 
         // Create order data with token_ids
         let order_data = self.signer.create_order_data(
@@ -295,38 +315,56 @@ impl Agent {
         )?;
 
         // Generate and sign transaction
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &order_data, None).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &order_data, None)
+            .await?;
 
         // Submit order
         let response = self.api.order(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Cancel an order
     pub async fn cancel(&self, order_id: &str) -> Result<String> {
         let cancel_data = self.signer.create_cancel_data(order_id)?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &cancel_data, None).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &cancel_data, None)
+            .await?;
         let response = self.api.cancel(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Cancel all orders
     pub async fn cancel_all(&self) -> Result<String> {
         let cancel_all_data = self.signer.create_cancel_all_data()?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &cancel_all_data, None).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &cancel_all_data, None)
+            .await?;
         let response = self.api.cancel_all(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
@@ -338,40 +376,66 @@ impl Agent {
         new_qty: f64,
         order_mode: OrderMode,
     ) -> Result<String> {
-        let modify_data = self.signer.create_modify_data(order_id, new_price, new_qty, order_mode as u32)?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &modify_data, None).await?;
+        let modify_data =
+            self.signer
+                .create_modify_data(order_id, new_price, new_qty, order_mode as u32)?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &modify_data, None)
+            .await?;
         let response = self.api.modify(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Transfer value (native token)
     pub async fn native_transfer(&self, to: &str, value: f64) -> Result<String> {
         let transfer_data = self.signer.create_value_transfer_data(to, value)?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &transfer_data, None).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &transfer_data, None)
+            .await?;
         let response = self.api.native_transfer(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Transfer tokens
     pub async fn token_transfer(&self, to: &str, value: f64, token: &str) -> Result<String> {
-        let token_id = self.api.token_metadata()
+        let token_id = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .symbol_token_id_map.get(token).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
-        let transfer_data = self.signer.create_token_transfer_data(to, value, token_id)?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &transfer_data, None).await?;
+            .symbol_token_id_map
+            .get(token)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+        let transfer_data = self
+            .signer
+            .create_token_transfer_data(to, value, token_id)?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &transfer_data, None)
+            .await?;
         let response = self.api.token_transfer(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
@@ -388,15 +452,23 @@ impl Agent {
         order_mode: OrderMode,
     ) -> Result<String> {
         // Convert symbols to token_ids using the metadata
-        let token_metadata = self.api.token_metadata()
+        let token_metadata = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?;
-        let base_token_id = token_metadata.symbol_token_id_map
+        let base_token_id = token_metadata
+            .symbol_token_id_map
             .get(base_token)
-            .ok_or_else(|| AlphaSecError::config(format!("Unknown base token symbol: {}", base_token)))?;
-        let quote_token_id = token_metadata.symbol_token_id_map
+            .ok_or_else(|| {
+                AlphaSecError::config(format!("Unknown base token symbol: {}", base_token))
+            })?;
+        let quote_token_id = token_metadata
+            .symbol_token_id_map
             .get(quote_token)
-            .ok_or_else(|| AlphaSecError::config(format!("Unknown quote token symbol: {}", quote_token)))?;
-            
+            .ok_or_else(|| {
+                AlphaSecError::config(format!("Unknown quote token symbol: {}", quote_token))
+            })?;
+
         let stop_data = self.signer.create_stop_order_data(
             base_token_id,
             quote_token_id,
@@ -407,135 +479,212 @@ impl Agent {
             order_type as u32,
             order_mode as u32,
         )?;
-        let signed_tx = self.signer.generate_alphasec_transaction(None, &stop_data, None).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(None, &stop_data, None)
+            .await?;
         let response = self.api.stop_order(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Create session
-    pub async fn create_session(&self, session_id: &str, session_wallet: Option<LocalWallet>, timestamp_ms: u64, expires_at: u64, metadata: &[u8]) -> Result<String> {
-
-        let new_session_wallet= match session_wallet {
+    pub async fn create_session(
+        &self,
+        session_id: &str,
+        session_wallet: Option<LocalWallet>,
+        timestamp_ms: u64,
+        expires_at: u64,
+        metadata: &[u8],
+    ) -> Result<String> {
+        let new_session_wallet = match session_wallet {
             Some(wallet) => wallet,
-            None => {
-                self.config.l2_wallet.as_ref()
-                    .cloned()
-                    .ok_or_else(|| AlphaSecError::invalid_parameter("L2 wallet is required for session operations"))?
-            }
+            None => self.config.l2_wallet.as_ref().cloned().ok_or_else(|| {
+                AlphaSecError::invalid_parameter("L2 wallet is required for session operations")
+            })?,
         };
 
-        let session_data = self.signer.create_session_data(
-            SESSION_COMMAND_CREATE,
-            new_session_wallet.clone(),
-            timestamp_ms,
-            expires_at,
-            metadata,
-        ).await?;
+        let session_data = self
+            .signer
+            .create_session_data(
+                SESSION_COMMAND_CREATE,
+                new_session_wallet.clone(),
+                timestamp_ms,
+                expires_at,
+                metadata,
+            )
+            .await?;
 
-        let signed_tx = self.signer
-            .generate_alphasec_transaction(Some(timestamp_ms), &session_data, Some(&new_session_wallet))
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(
+                Some(timestamp_ms),
+                &session_data,
+                Some(&new_session_wallet),
+            )
             .await?;
         let response = self.api.create_session(session_id, &signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Update session
-    pub async fn update_session(&self, session_id: &str, session_wallet: Option<LocalWallet>, timestamp_ms: u64, expires_at: u64, metadata: &[u8]) -> Result<String> {
-        let new_session_wallet= match session_wallet {
+    pub async fn update_session(
+        &self,
+        session_id: &str,
+        session_wallet: Option<LocalWallet>,
+        timestamp_ms: u64,
+        expires_at: u64,
+        metadata: &[u8],
+    ) -> Result<String> {
+        let new_session_wallet = match session_wallet {
             Some(wallet) => wallet,
-            None => {
-                self.config.l2_wallet.as_ref()
-                    .cloned()
-                    .ok_or_else(|| AlphaSecError::invalid_parameter("L2 wallet is required for session operations"))?
-            }
+            None => self.config.l2_wallet.as_ref().cloned().ok_or_else(|| {
+                AlphaSecError::invalid_parameter("L2 wallet is required for session operations")
+            })?,
         };
-        let session_data = self.signer.create_session_data(
-            SESSION_COMMAND_UPDATE, 
-            new_session_wallet.clone(), 
-            timestamp_ms, 
-            expires_at, 
-            metadata
-        ).await?;
+        let session_data = self
+            .signer
+            .create_session_data(
+                SESSION_COMMAND_UPDATE,
+                new_session_wallet.clone(),
+                timestamp_ms,
+                expires_at,
+                metadata,
+            )
+            .await?;
 
-        let signed_tx = self.signer.generate_alphasec_transaction(Some(timestamp_ms), &session_data, Some(&new_session_wallet)).await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(
+                Some(timestamp_ms),
+                &session_data,
+                Some(&new_session_wallet),
+            )
+            .await?;
         let response = self.api.update_session(session_id, &signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// Delete session
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `session_id` - Session ID
     /// * `timestamp_ms` - Timestamp in milliseconds
     /// * `expires_at` - Expiration time in milliseconds
     /// * `metadata` - Metadata
-    pub async fn delete_session(&self, session_wallet: Option<LocalWallet>, timestamp_ms: u64) -> Result<String> {
-        let new_session_wallet= match session_wallet {
+    pub async fn delete_session(
+        &self,
+        session_wallet: Option<LocalWallet>,
+        timestamp_ms: u64,
+    ) -> Result<String> {
+        let new_session_wallet = match session_wallet {
             Some(wallet) => wallet,
-            None => {
-                self.config.l2_wallet.as_ref()
-                    .cloned()
-                    .ok_or_else(|| AlphaSecError::invalid_parameter("L2 wallet is required for session operations"))?
-            }
+            None => self.config.l2_wallet.as_ref().cloned().ok_or_else(|| {
+                AlphaSecError::invalid_parameter("L2 wallet is required for session operations")
+            })?,
         };
-        let session_data = self.signer.create_session_data(SESSION_COMMAND_DELETE, new_session_wallet.clone(), timestamp_ms, 0, &[]).await?;
-        let signed_tx = self.signer.generate_alphasec_transaction(Some(timestamp_ms), &session_data, Some(&new_session_wallet)).await?;
+        let session_data = self
+            .signer
+            .create_session_data(
+                SESSION_COMMAND_DELETE,
+                new_session_wallet.clone(),
+                timestamp_ms,
+                0,
+                &[],
+            )
+            .await?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(
+                Some(timestamp_ms),
+                &session_data,
+                Some(&new_session_wallet),
+            )
+            .await?;
         let response = self.api.delete_session(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
     /// deposit token
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `token` - Token symbol (e.g., "KAIA")
     /// * `value` - Amount to deposit in trading units
     pub async fn deposit_token(&self, token: &str, value: f64) -> Result<String> {
-        let token_id = self.api.token_metadata().clone()
+        let token_id = self
+            .api
+            .token_metadata()
+            .clone()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .symbol_token_id_map.get(token).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
-        let token_l1_address = self.api.token_metadata()
+            .symbol_token_id_map
+            .get(token)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+        let token_l1_address = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .token_id_address_map.get(token_id).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
-        let token_l1_decimals = self.api.token_metadata()
+            .token_id_address_map
+            .get(token_id)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+        let token_l1_decimals = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .token_id_decimal_map.get(token_id).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+            .token_id_decimal_map
+            .get(token_id)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
         let l1_url = match self.config.network {
             crate::signer::config::Network::Mainnet => endpoints::KAIA_MAINNET_URL,
             crate::signer::config::Network::Kairos => endpoints::KAIA_KAIROS_URL,
         };
-        let l1_url = l1_url.parse::<reqwest::Url>()
+        let l1_url = l1_url
+            .parse::<reqwest::Url>()
             .map_err(|e| AlphaSecError::config(format!("Invalid L1 URL: {}", e)))?;
         let l1_provider = std::sync::Arc::new(ethers::providers::Provider::new(
-            ethers::providers::Http::new(l1_url.clone())
+            ethers::providers::Http::new(l1_url.clone()),
         ));
-        
+
         tracing::info!("token_l1_decimals: {}", token_l1_decimals);
 
-        let signed_tx = self.signer.generate_deposit_transaction(
-            &l1_provider,
-            token_id,
-            value,
-            Some(token_l1_address),
-            Some(token_l1_decimals.parse::<u8>().unwrap_or(18)),
-        ).await?;
+        let signed_tx = self
+            .signer
+            .generate_deposit_transaction(
+                &l1_provider,
+                token_id,
+                value,
+                Some(token_l1_address),
+                Some(token_l1_decimals.parse::<u8>().unwrap_or(18)),
+            )
+            .await?;
 
         let raw_tx_bytes = hex::decode(&signed_tx[2..])
             .map_err(|e| AlphaSecError::config(format!("Failed to decode signed tx: {}", e)))?;
@@ -550,55 +699,67 @@ impl Agent {
                 if receipt.status == Some(U64::from(1)) {
                     Ok(format!("{:#x}", receipt.transaction_hash))
                 } else {
-                    Err(AlphaSecError::config(format!("Deposit transaction was reverted: {:?}", receipt.status)))
+                    Err(AlphaSecError::config(format!(
+                        "Deposit transaction was reverted: {:?}",
+                        receipt.status
+                    )))
                 }
-            },
-            Ok(None) => {
-                Err(AlphaSecError::config("Failed to get receipt"))
-            },
-            Err(e) => {
-                Err(AlphaSecError::config(format!("Failed to get receipt: {}", e)))
             }
+            Ok(None) => Err(AlphaSecError::config("Failed to get receipt")),
+            Err(e) => Err(AlphaSecError::config(format!(
+                "Failed to get receipt: {}",
+                e
+            ))),
         }
     }
 
     /// withdraw token
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `token` - Token symbol (e.g., "KAIA")
     /// * `value` - Amount to withdraw in trading units
     pub async fn withdraw_token(&self, token: &str, value: f64) -> Result<String> {
-
-        let token_id = self.api.token_metadata().clone()
+        let token_id = self
+            .api
+            .token_metadata()
+            .clone()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .symbol_token_id_map.get(token).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
-        let token_l1_address = self.api.token_metadata()
+            .symbol_token_id_map
+            .get(token)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+        let token_l1_address = self
+            .api
+            .token_metadata()
             .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
-            .token_id_address_map.get(token_id).ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+            .token_id_address_map
+            .get(token_id)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
         let l1_url = match self.config.network {
             crate::signer::config::Network::Mainnet => endpoints::KAIA_MAINNET_URL,
             crate::signer::config::Network::Kairos => endpoints::KAIA_KAIROS_URL,
         };
 
-        let l1_url = l1_url.parse::<reqwest::Url>()
+        let l1_url = l1_url
+            .parse::<reqwest::Url>()
             .map_err(|e| AlphaSecError::config(format!("Invalid L1 URL: {}", e)))?;
         let l1_provider = std::sync::Arc::new(ethers::providers::Provider::new(
-            ethers::providers::Http::new(l1_url.clone())
+            ethers::providers::Http::new(l1_url.clone()),
         ));
 
-        let signed_tx = self.signer.generate_withdraw_transaction(
-            &l1_provider,
-            token_id,
-            value,
-            Some(token_l1_address),
-        ).await?;
+        let signed_tx = self
+            .signer
+            .generate_withdraw_transaction(&l1_provider, token_id, value, Some(token_l1_address))
+            .await?;
 
         let response = self.api.withdraw_token(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
         } else {
-            Err(AlphaSecError::api(response.code.unwrap(), response.error.unwrap()))
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
         }
     }
 
@@ -683,7 +844,7 @@ impl Agent {
     // === Wallet/Session Helpers ===
 
     /// Get balance
-    pub async fn get_balance(&self, addr: &str) -> Result<Vec<Balance>> {
+    pub async fn get_balance(&self, addr: &str) -> Result<Balances> {
         self.api.get_balance(addr).await
     }
 

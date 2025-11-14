@@ -3,37 +3,43 @@
 /// AlphaSec contract addresses and constants
 pub mod l2_contracts {
     /// AlphaSec Gateway Router contract address
-    pub const ALPHASEC_GATEWAY_ROUTER_CONTRACT_ADDR: &str = "0xD2b30f9548DEE14093CF903ec70866469EFff97A";
-    
+    pub const ALPHASEC_GATEWAY_ROUTER_CONTRACT_ADDR: &str =
+        "0xD2b30f9548DEE14093CF903ec70866469EFff97A";
+
     /// AlphaSec Order contract address  
     pub const ALPHASEC_ORDER_CONTRACT_ADDR: &str = "0x00000000000000000000000000000000000000cc";
-    
+
     /// AlphaSec System contract address
     pub const ALPHASEC_SYSTEM_CONTRACT_ADDR: &str = "0x0000000000000000000000000000000000000064";
-    
+
     /// AlphaSec ZK Interface contract address
-    pub const ALPHASEC_ZK_INTERFACE_CONTRACT_ADDR: &str = "0x0000000000000000000000000000000000000000";
+    pub const ALPHASEC_ZK_INTERFACE_CONTRACT_ADDR: &str =
+        "0x0000000000000000000000000000000000000000";
 }
 
 /// L1 contract addresses for deposit/withdrawal
 pub mod l1_contracts {
     /// Mainnet Inbox contract address
     pub const MAINNET_INBOX_CONTRACT_ADDR: &str = "0x6EE619c6E74e34a802279437e22c98633c28643e";
-    
+
     /// Kairos Inbox contract address
     pub const KAIROS_INBOX_CONTRACT_ADDR: &str = "0x6EE619c6E74e34a802279437e22c98633c28643e";
-    
+
     /// Mainnet ERC20 Gateway contract address
-    pub const MAINNET_ERC20_GATEWAY_CONTRACT_ADDR: &str = "0xec5cD95184124Ee2cc4C90fb7f74E3b717160d51";
-    
+    pub const MAINNET_ERC20_GATEWAY_CONTRACT_ADDR: &str =
+        "0xec5cD95184124Ee2cc4C90fb7f74E3b717160d51";
+
     /// Kairos ERC20 Gateway contract address
-    pub const KAIROS_ERC20_GATEWAY_CONTRACT_ADDR: &str = "0xec5cD95184124Ee2cc4C90fb7f74E3b717160d51";
-    
+    pub const KAIROS_ERC20_GATEWAY_CONTRACT_ADDR: &str =
+        "0xec5cD95184124Ee2cc4C90fb7f74E3b717160d51";
+
     /// Mainnet ERC20 Router contract address
-    pub const MAINNET_ERC20_ROUTER_CONTRACT_ADDR: &str = "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
-   
+    pub const MAINNET_ERC20_ROUTER_CONTRACT_ADDR: &str =
+        "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
+
     /// Kairos ERC20 Router contract address
-    pub const KAIROS_ERC20_ROUTER_CONTRACT_ADDR: &str = "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
+    pub const KAIROS_ERC20_ROUTER_CONTRACT_ADDR: &str =
+        "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
 }
 
 /// Chain IDs for different networks
@@ -43,10 +49,10 @@ pub mod chain_ids {
 
     /// AlphaSec L2 MAINNET CHAIN ID
     pub const ALPHASEC_MAINNET_CHAIN_ID: u64 = 48217;
-    
+
     /// Kaia mainnet chain ID
     pub const KAIA_MAINNET_CHAIN_ID: u64 = 8217;
-    
+
     /// Kaia testnet (Kairos) chain ID
     pub const KAIA_KAIROS_CHAIN_ID: u64 = 1001;
 }
@@ -65,25 +71,25 @@ pub mod session_commands {
 pub mod dex_commands {
     /// Session command
     pub const DEX_COMMAND_SESSION: u8 = 0x01;
-    
+
     /// Transfer command
     pub const DEX_COMMAND_TRANSFER: u8 = 0x02;
-    
+
     /// Token transfer command
     pub const DEX_COMMAND_TOKEN_TRANSFER: u8 = 0x11;
-    
+
     /// Order command (alphasec style)
     pub const DEX_COMMAND_ORDER: u8 = 0x21;
-    
+
     /// Cancel command (alphasec style)
     pub const DEX_COMMAND_CANCEL: u8 = 0x22;
-    
+
     /// Cancel all command (alphasec style)
     pub const DEX_COMMAND_CANCEL_ALL: u8 = 0x23;
-    
+
     /// Modify command (alphasec style)
     pub const DEX_COMMAND_MODIFY: u8 = 0x24;
-    
+
     /// Stop order command (alphasec style)
     pub const DEX_COMMAND_STOP_ORDER: u8 = 0x25;
 }
@@ -95,16 +101,16 @@ pub const ALPHASEC_NATIVE_TOKEN_ID: u32 = 1;
 pub mod endpoints {
     /// AlphaSec API base URL
     pub const ALPHASEC_API_URL: &str = "https://api-testnet.alphasec.trade";
-    
+
     /// AlphaSec mainnet L2 RPC URL
     pub const ALPHASEC_MAINNET_URL: &str = "https://rpc.alphasec.trade";
-    
+
     /// AlphaSec kairos L2 RPC URL
     pub const ALPHASEC_KAIROS_URL: &str = "https://kairos-rpc.alphasec.trade";
-    
+
     /// Kaia mainnet RPC URL
     pub const KAIA_MAINNET_URL: &str = "https://public-en-cypress.klaytn.net";
-    
+
     /// Kaia kairos RPC URL
     pub const KAIA_KAIROS_URL: &str = "https://public-en-kairos.node.kaia.io";
 }
@@ -113,13 +119,13 @@ pub mod endpoints {
 pub mod gas {
     /// Default gas limit for AlphaSec transactions
     pub const DEFAULT_GAS_LIMIT: u64 = 1_000_000;
-    
+
     /// Default gas price (0 for AlphaSec L2)
     pub const DEFAULT_GAS_PRICE: u64 = 0;
-    
+
     /// Default max fee per gas (0 for AlphaSec L2)
     pub const DEFAULT_MAX_FEE_PER_GAS: u64 = 0;
-    
+
     /// Default max priority fee per gas (0 for AlphaSec L2)
     pub const DEFAULT_MAX_PRIORITY_FEE_PER_GAS: u64 = 0;
 }
@@ -128,10 +134,10 @@ pub mod gas {
 pub mod eip712 {
     /// EIP-712 domain name
     pub const DOMAIN_NAME: &str = "DEXSignTransaction";
-    
+
     /// EIP-712 domain version
     pub const DOMAIN_VERSION: &str = "1";
-    
+
     /// EIP-712 verifying contract (zero address)
     pub const VERIFYING_CONTRACT: &str = "0x0000000000000000000000000000000000000000";
 }

@@ -1,9 +1,9 @@
 //! Transfer KAIA example
-//! 
+//!
 //! This example demonstrates how to transfer native KAIA tokens only
 
 use alphasec_rust_sdk::{Agent, Config};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -15,11 +15,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c",  // Your L1 address
+        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your L1 address
         Some("ca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
-        None, // L2 key, no session
+        None,  // L2 key, no session
         false, // L1 key, no session
-        None // Chain ID
+        None,  // Chain ID
     )?;
 
     // Create Agent
@@ -33,7 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Value transfer (native KAIA)
     info!("💰 Transferring {} KAIA to {}...", amount, recipient);
     match agent.native_transfer(recipient, amount).await {
-        Ok(result) => info!("✅ Value transfer successful: {} KAIA to {}, result: {}", amount, recipient, result),
+        Ok(result) => info!(
+            "✅ Value transfer successful: {} KAIA to {}, result: {}",
+            amount, recipient, result
+        ),
         Err(e) => {
             error!("❌ Failed to transfer KAIA: {}", e);
             return Err(e.into());

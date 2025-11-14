@@ -33,7 +33,7 @@ impl ApiResponse<Value> {
     }
 }
 
-impl<T> fmt::Display for ApiResponse<T> 
+impl<T> fmt::Display for ApiResponse<T>
 where
     T: fmt::Display,
 {
@@ -47,5 +47,3 @@ where
         }
     }
 }
-
-
