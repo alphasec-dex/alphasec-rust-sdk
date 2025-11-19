@@ -527,10 +527,10 @@ impl WsManager {
                         Some(Ok(Message::Close(close_frame))) => {
                             match close_frame {
                                 Some(frame) => {
-                                    warn!("WebSocket closed by server: code={:?}, reason=\"{}\"", frame.code, frame.reason);
+                                    error!("WebSocket closed by server: code={:?}, reason=\"{}\"", frame.code, frame.reason);
                                 },
                                 None => {
-                                    warn!("WebSocket closed without close frame");
+                                    error!("WebSocket closed without close frame");
                                 }
                             }
                             break;
