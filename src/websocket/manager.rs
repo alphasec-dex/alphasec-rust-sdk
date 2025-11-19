@@ -59,7 +59,7 @@ impl Default for WsConfig {
             reconnect_delay: Duration::from_secs(1),
             max_reconnect_delay: Duration::from_secs(30),
             ping_interval: Duration::from_secs(10),
-            pong_timeout: Duration::from_secs(10),
+            pong_timeout: Duration::from_secs(30),
             message_queue_size: 1000,
         }
     }
@@ -524,8 +524,15 @@ impl WsManager {
                             debug!("Received pong");
                             last_pong = Instant::now();
                         },
-                        Some(Ok(Message::Close(_))) => {
-                            info!("WebSocket connection closed by server");
+                        Some(Ok(Message::Close(close_frame))) => {
+                            match close_frame {
+                                Some(frame) => {
+                                    error!("WebSocket closed by server: code={:?}, reason=\"{}\"", frame.code, frame.reason);
+                                },
+                                None => {
+                                    error!("WebSocket closed without close frame");
+                                }
+                            }
                             break;
                         },
                         Some(Err(e)) => {
