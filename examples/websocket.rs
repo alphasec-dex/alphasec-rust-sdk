@@ -1,8 +1,9 @@
 //! This example demonstrates how to use the WebSocket client in a channel-based
 
 use alphasec_rust_sdk::{Agent, Config};
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant, interval, sleep};
 use tracing::{error, info, Level};
+use tokio_tungstenite::tungstenite::Message;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,9 +51,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("📡 Subscribed to channels userEvent = {}", sub4);
 
     // Spawn a task to process messages
+    let ws_sender = agent
+        .get_ws_sender()
+        .await.unwrap();
+
     let message_processor = tokio::spawn(async move {
         let mut message_count = 0;
         let start = Instant::now();
+
+        // periodic ping
+        {
+            let ping_sender = ws_sender.clone();
+            tokio::spawn(async move {
+                let mut t = interval(Duration::from_secs(20));
+                loop {
+                    t.tick().await;
+                    let _ = ping_sender.send(Message::Ping(Vec::new()));
+                    info!("🔧 Ping message sent");
+                }
+            });
+        }
 
         while let Some(message) = message_receiver.recv().await {
             message_count += 1;
@@ -63,6 +81,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "📡 Subscription ack #{}: id={}, result={}",
                         message_count, id, result
                     );
+                }
+                alphasec_rust_sdk::types::WebSocketMessage::Disconnected => {
+                    info!("🔌 Disconnected (typed)");
                 }
                 alphasec_rust_sdk::types::WebSocketMessage::TradeMsg { params, .. } => {
                     for trade in &params.result {
@@ -122,11 +143,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 alphasec_rust_sdk::types::WebSocketMessage::Generic(value) => {
                     info!("🔧 Generic message #{}: {:?}", message_count, value);
                 }
+                alphasec_rust_sdk::types::WebSocketMessage::Pong(items) => {
+                    info!("🔧 Pong message #{}: {:?}", message_count, items);
+                }
+                alphasec_rust_sdk::types::WebSocketMessage::Ping(items) => {
+                    info!("🔧 Ping message #{}: {:?}", message_count, items);
+                    let _ = ws_sender.send(Message::Pong(items));
+                    info!("🔧 Pong message sent #{}", message_count);
+                }
             }
 
             // Stop after 30 seconds
             if start.elapsed().as_secs() > 30 {
                 info!("📊 Received {} messages, stopping...", message_count);
+                let _ = ws_sender.send(Message::Close(None));
                 break;
             }
         }
@@ -134,8 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("🔚 Message processing completed");
     });
 
-    // Let it run for a while
-    sleep(Duration::from_secs(200)).await;
+    sleep(Duration::from_secs(20)).await;
 
     // Unsubscribe from some channels
     // info!("📡 Unsubscribing from ticker...");
@@ -146,8 +175,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     agent.unsubscribe(sub3).await?;
     info!("📡 Unsubscribing from userEvent...");
     agent.unsubscribe(sub4).await?;
-
-    sleep(Duration::from_secs(10)).await;
 
     // Stop the WebSocket connection
     info!("🛑 Stopping WebSocket connection...");

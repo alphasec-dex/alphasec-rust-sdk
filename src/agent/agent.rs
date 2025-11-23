@@ -232,6 +232,18 @@ impl Agent {
         }
     }
 
+    /// Get a clone of the underlying WebSocket sender for direct frame sending.
+    #[cfg(feature = "websocket")]
+    pub async fn get_ws_sender(
+        &self,
+    ) -> Option<mpsc::UnboundedSender<tokio_tungstenite::tungstenite::Message>> {
+        if let Some(ref ws) = self.ws {
+            ws.get_outgoing_sender().await
+        } else {
+            None
+        }
+    }
+
     /// Unsubscribe from WebSocket channel
     #[cfg(feature = "websocket")]
     pub async fn unsubscribe(&self, subscription_id: i32) -> Result<bool> {

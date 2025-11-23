@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::time::{interval, sleep};
+use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
 use url::Url;
@@ -131,6 +131,8 @@ pub struct WsManager {
     message_rx: Arc<Mutex<Option<mpsc::UnboundedReceiver<WebSocketMessage>>>>,
     /// Sender used by the connection task to forward parsed messages
     message_tx: Option<mpsc::UnboundedSender<WebSocketMessage>>,
+    /// Sender used by SDK users to send raw WebSocket messages (ping/pong, etc.)
+    outgoing_sender: Arc<Mutex<Option<mpsc::UnboundedSender<Message>>>>,
 }
 
 impl std::fmt::Debug for WsManager {
@@ -158,6 +160,7 @@ impl Clone for WsManager {
             stats: Arc::clone(&self.stats),
             message_rx: Arc::clone(&self.message_rx),
             message_tx: self.message_tx.clone(),
+            outgoing_sender: Arc::clone(&self.outgoing_sender),
         }
     }
 }
@@ -177,6 +180,7 @@ impl WsManager {
             stats: Arc::new(Mutex::new(ConnectionStats::default())),
             message_rx: Arc::new(Mutex::new(Some(message_rx))),
             message_tx: Some(message_tx),
+            outgoing_sender: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -200,9 +204,18 @@ impl WsManager {
             .as_ref()
             .expect("message_tx not initialized")
             .clone();
+        let outgoing_sender = Arc::clone(&self.outgoing_sender);
 
         let handle = tokio::spawn(async move {
-            Self::connection_task(config, state, subscriptions, control_rx, message_tx, stats)
+            Self::connection_task(
+                config,
+                state,
+                subscriptions,
+                control_rx,
+                message_tx,
+                stats,
+                outgoing_sender,
+            )
                 .await;
         });
         self.control_task = Some(handle);
@@ -309,10 +322,11 @@ impl WsManager {
         mut control_rx: mpsc::UnboundedReceiver<ManagerCommand>,
         message_tx: mpsc::UnboundedSender<WebSocketMessage>,
         stats: Arc<Mutex<ConnectionStats>>,
+        outgoing_sender: Arc<Mutex<Option<mpsc::UnboundedSender<Message>>>>,
     ) {
         let mut reconnect_attempts = 0;
-        let mut should_connect = false;
         let mut current_reconnect_delay = config.reconnect_delay;
+        let mut ever_connected = false;
 
         loop {
             tokio::select! {
@@ -320,12 +334,10 @@ impl WsManager {
                 Some(cmd) = control_rx.recv() => {
                     match cmd {
                         ManagerCommand::Connect => {
-                            should_connect = true;
                             reconnect_attempts = 0;
                             current_reconnect_delay = config.reconnect_delay;
                         },
                         ManagerCommand::Disconnect => {
-                            should_connect = false;
                             *state.write().await = ConnectionState::Closed;
                             break;
                         },
@@ -333,9 +345,9 @@ impl WsManager {
                     }
                 },
                 // Connection logic
-                _ = tokio::time::sleep(Duration::from_millis(100)), if should_connect => {
+                _ = tokio::time::sleep(Duration::from_millis(100)) => {
                     if matches!(*state.read().await, ConnectionState::Disconnected | ConnectionState::Reconnecting) {
-                        Self::handle_connection(
+                        let did_connect = Self::handle_connection(
                             &config,
                             &state,
                             &subscriptions,
@@ -344,11 +356,19 @@ impl WsManager {
                             &stats,
                             &mut reconnect_attempts,
                             &mut current_reconnect_delay,
+                            &outgoing_sender,
                         ).await;
+                        if did_connect {
+                            ever_connected = true;
+                        }
 
                         // If a Disconnect was processed inside handle_connection, the state is Closed.
                         // Break the outer task loop so stop() can join this task.
                         if matches!(*state.read().await, ConnectionState::Closed) {
+                            break;
+                        }
+                        // After a successful connection, do NOT auto-reconnect on later disconnects
+                        if ever_connected && matches!(*state.read().await, ConnectionState::Disconnected) {
                             break;
                         }
                     }
@@ -368,7 +388,8 @@ impl WsManager {
         stats: &Arc<Mutex<ConnectionStats>>,
         reconnect_attempts: &mut u32,
         current_reconnect_delay: &mut Duration,
-    ) {
+        outgoing_sender: &Arc<Mutex<Option<mpsc::UnboundedSender<Message>>>>,
+    ) -> bool {
         // Update state to connecting
         *state.write().await = ConnectionState::Connecting;
 
@@ -386,7 +407,7 @@ impl WsManager {
             Err(e) => {
                 error!("❌ Invalid WebSocket URL: {}", e);
                 *state.write().await = ConnectionState::Disconnected;
-                return;
+                return false;
             }
         };
 
@@ -403,7 +424,7 @@ impl WsManager {
                 {
                     error!("❌ Max reconnection attempts reached");
                     *state.write().await = ConnectionState::Disconnected;
-                    return;
+                    return false;
                 }
 
                 *state.write().await = ConnectionState::Reconnecting;
@@ -415,7 +436,7 @@ impl WsManager {
                 sleep(*current_reconnect_delay).await;
                 *current_reconnect_delay =
                     std::cmp::min(*current_reconnect_delay * 2, config.max_reconnect_delay);
-                return;
+                return false;
             }
         };
 
@@ -424,6 +445,7 @@ impl WsManager {
         *state.write().await = ConnectionState::Connected;
         *reconnect_attempts = 0;
         *current_reconnect_delay = config.reconnect_delay;
+        // from here on, we have been connected at least once in this session
 
         // Update stats
         {
@@ -433,7 +455,13 @@ impl WsManager {
         }
 
         let (mut ws_sink, mut ws_stream) = ws_stream.split();
-        let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<String>();
+        let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded_channel::<Message>();
+
+        // Expose outgoing sender to SDK users for ping/pong handling
+        {
+            let mut sender_guard = outgoing_sender.lock().await;
+            *sender_guard = Some(outgoing_tx.clone());
+        }
 
         // Re-subscribe to existing channels
         {
@@ -444,15 +472,11 @@ impl WsManager {
                     "params": [channel],
                     "id": id
                 });
-                if let Err(e) = outgoing_tx.send(subscribe_msg.to_string()) {
+                if let Err(e) = outgoing_tx.send(Message::Text(subscribe_msg.to_string())) {
                     error!("Failed to re-subscribe to {}: {}", channel, e);
                 }
             }
         }
-
-        // Ping timer
-        let mut ping_interval = interval(config.ping_interval);
-        let mut last_pong = Instant::now();
 
         // Main connection loop
         loop {
@@ -495,6 +519,14 @@ impl WsManager {
                                             debug!("Generic WebSocket message: {:?}", value);
                                             true
                                         },
+                                        WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => {
+                                            true
+                                        },
+                                        WebSocketMessage::Disconnected => {
+                                            // Disconnected is SDK-internal; it won't come from server JSON.
+                                            // Still mark as forwardable to satisfy exhaustiveness.
+                                            true
+                                        }
                                     };
 
                                     if should_forward {
@@ -520,9 +552,13 @@ impl WsManager {
                                 }
                             }
                         },
-                        Some(Ok(Message::Pong(_))) => {
-                            debug!("Received pong");
-                            last_pong = Instant::now();
+                        Some(Ok(Message::Pong(payload))) => {
+                            debug!("Received pong ({} bytes)", payload.len());
+                            let _ = message_tx.send(WebSocketMessage::Pong(payload));
+                        },
+                        Some(Ok(Message::Ping(payload))) => {
+                            debug!("Received ping ({} bytes)", payload.len());
+                            let _ = message_tx.send(WebSocketMessage::Ping(payload));
                         },
                         Some(Ok(Message::Close(close_frame))) => {
                             match close_frame {
@@ -549,8 +585,15 @@ impl WsManager {
 
                 // Handle outgoing messages
                 Some(msg) = outgoing_rx.recv() => {
-                    debug!("Sending: {}", msg);
-                    if let Err(e) = ws_sink.send(Message::Text(msg)).await {
+                    match &msg {
+                        Message::Text(t) => debug!("Sending text: {}", t),
+                        Message::Binary(b) => debug!("Sending binary: {} bytes", b.len()),
+                        Message::Ping(p) => debug!("Sending ping: {} bytes", p.len()),
+                        Message::Pong(p) => debug!("Sending pong: {} bytes", p.len()),
+                        Message::Close(_) => debug!("Sending close"),
+                        _ => debug!("Sending control frame"),
+                    }
+                    if let Err(e) = ws_sink.send(msg).await {
                         error!("❌ Failed to send message: {}", e);
                         break;
                     }
@@ -569,7 +612,12 @@ impl WsManager {
                             info!("🛑 Disconnect requested");
                             let _ = ws_sink.send(Message::Close(None)).await;
                             *state.write().await = ConnectionState::Closed;
-                            return;
+                            // Clear exposed outgoing sender on disconnect
+                            {
+                                let mut sender_guard = outgoing_sender.lock().await;
+                                *sender_guard = None;
+                            }
+                            return true;
                         },
                         ManagerCommand::Subscribe { id, channel } => {
                             debug!("Sending subscribe message: {}", channel);
@@ -578,7 +626,7 @@ impl WsManager {
                                 "params": {"channels": [channel]},
                                 "id": id
                             });
-                            if let Err(e) = outgoing_tx.send(subscribe_msg.to_string()) {
+                            if let Err(e) = outgoing_tx.send(Message::Text(subscribe_msg.to_string())) {
                                 error!("Failed to send subscribe message: {}", e);
                             }
                         },
@@ -588,29 +636,13 @@ impl WsManager {
                                 "params": {"channels": [channel]},
                                 "id": id
                             });
-                            if let Err(e) = outgoing_tx.send(unsubscribe_msg.to_string()) {
+                            if let Err(e) = outgoing_tx.send(Message::Text(unsubscribe_msg.to_string())) {
                                 error!("Failed to send unsubscribe message: {}", e);
                             }
                         },
                         _ => {}
                     }
                 },
-
-                // Handle ping/pong health check
-                _ = ping_interval.tick() => {
-                    // Check if we received a pong recently
-                    if last_pong.elapsed() > config.pong_timeout {
-                        error!("❌ Pong timeout, connection seems dead");
-                        break;
-                    }
-
-                    // Send ping
-                    debug!("Sending ping");
-                    if let Err(e) = ws_sink.send(Message::Ping(vec![])).await {
-                        error!("❌ Failed to send ping: {}", e);
-                        break;
-                    }
-                }
             }
         }
 
@@ -623,5 +655,19 @@ impl WsManager {
             let mut stats_guard = stats.lock().await;
             stats_guard.last_disconnected_at = Some(Instant::now());
         }
+        // Clear exposed outgoing sender when connection ends
+        {
+            let mut sender_guard = outgoing_sender.lock().await;
+            *sender_guard = None;
+        }
+        // Notify SDK user immediately about disconnection
+        let _ = message_tx.send(WebSocketMessage::Disconnected);
+        true
+    }
+
+    /// Get a clone of the underlying WebSocket sender for direct frame sending.
+    /// Returns None if not connected.
+    pub async fn get_outgoing_sender(&self) -> Option<mpsc::UnboundedSender<Message>> {
+        self.outgoing_sender.lock().await.as_ref().cloned()
     }
 }

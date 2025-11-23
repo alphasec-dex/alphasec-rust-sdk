@@ -13,6 +13,8 @@ pub enum WebSocketMessage {
         /// Result (usually "success")
         result: String,
     },
+    /// Disconnected notification (SDK-internal, not from server)
+    Disconnected,
     /// Trade message
     TradeMsg {
         /// Method (always "subscription")
@@ -43,6 +45,10 @@ pub enum WebSocketMessage {
     },
     /// Generic message (fallback for any other format)
     Generic(serde_json::Value),
+    /// Pong message
+    Pong(Vec<u8>),
+    /// Ping message
+    Ping(Vec<u8>),
 }
 
 /// Trade parameters
