@@ -90,7 +90,7 @@ impl AlphaSecSigner {
 
     /// Generate alphasec-style nonce (timestamp + counter)
     fn get_alphasec_nonce(&self) -> u64 {
-        Self::current_timestamp_ms() + self.nonce_counter.fetch_add(1, Ordering::SeqCst)
+        Self::current_timestamp_ms() + self.nonce_counter.fetch_add(5, Ordering::SeqCst)
     }
 
     /// Create EIP-712 typed data for session registration
@@ -357,7 +357,8 @@ impl AlphaSecSigner {
             Some(w) => w,
             None => self.get_wallet()?,
         };
-        let nonce = timestamp_ms.unwrap_or_else(|| self.get_alphasec_nonce());
+        // let nonce = timestamp_ms.unwrap_or_else(|| self.get_alphasec_nonce());
+        let nonce = timestamp_ms.unwrap_or(self.get_alphasec_nonce());
 
         let chain_id = if self.config.chain_id.is_some() {
             self.config.chain_id.unwrap()
