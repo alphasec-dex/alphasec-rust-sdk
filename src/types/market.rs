@@ -15,6 +15,9 @@ pub struct Token {
     /// Layer 1 symbol (e.g., "KAIA", "USDT")
     #[serde(rename = "l1Symbol")]
     pub symbol: String,
+    /// Layer 2 symbol (e.g., "KAIA", "USDT")
+    #[serde(rename = "l2Symbol")]
+    pub l2_symbol: String,
     /// Layer 1 contract address
     #[serde(rename = "l1Address")]
     pub l1_address: String,
@@ -172,8 +175,8 @@ impl TokenMetadata {
         let mut token_id_decimal_map = HashMap::new();
 
         for token in tokens {
-            token_id_symbol_map.insert(token.token_id.clone(), token.symbol.clone());
-            symbol_token_id_map.insert(token.symbol.clone(), token.token_id.clone());
+            token_id_symbol_map.insert(token.token_id.clone(), token.l2_symbol.clone());
+            symbol_token_id_map.insert(token.l2_symbol.clone(), token.token_id.clone());
             token_id_address_map.insert(token.token_id.clone(), token.l1_address.clone());
             token_id_decimal_map.insert(token.token_id.clone(), token.decimals.to_string());
         }

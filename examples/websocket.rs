@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create configuration for Kairos testnet
     let config = Config::new(
         // "https://api-testnet.alphasec.trade",
-        "https://api-dev.dexor.trade",
+        "https://api-qa.dexor.trade",
         "kairos",
         "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c",
         Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"),
@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             let ping_sender = ws_sender.clone();
             tokio::spawn(async move {
-                let mut t = interval(Duration::from_secs(20));
+                let mut t = interval(Duration::from_secs(1));
                 loop {
                     t.tick().await;
                     let _ = ping_sender.send(Message::Ping(Vec::new()));
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
                 alphasec_rust_sdk::types::WebSocketMessage::Disconnected => {
-                    info!("🔌 Disconnected (typed)");
+                    info!("🔌 Disconnected");
                 }
                 alphasec_rust_sdk::types::WebSocketMessage::TradeMsg { params, .. } => {
                     for trade in &params.result {
