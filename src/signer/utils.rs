@@ -46,16 +46,16 @@ pub fn normalize_price_quantity(price: Decimal, quantity: Decimal) -> Result<(De
         }
     }
 
-    fn get_quantity_precision(quantity: Decimal) -> u64 {
-        if quantity >= Decimal::from_str("10000.0").unwrap() {
+    fn get_quantity_precision(price: Decimal) -> u64 {
+        if price >= Decimal::from_str("10000.0").unwrap() {
             5
-        } else if quantity >= Decimal::from_str("1000.0").unwrap() {
+        } else if price >= Decimal::from_str("1000.0").unwrap() {
             4
-        } else if quantity >= Decimal::from_str("100.0").unwrap() {
+        } else if price >= Decimal::from_str("100.0").unwrap() {
             3
-        } else if quantity >= Decimal::from_str("10.0").unwrap() {
+        } else if price >= Decimal::from_str("10.0").unwrap() {
             2
-        } else if quantity >= Decimal::from_str("1.0").unwrap() {
+        } else if price >= Decimal::from_str("1.0").unwrap() {
             1
         } else {
             1
@@ -72,7 +72,7 @@ pub fn normalize_price_quantity(price: Decimal, quantity: Decimal) -> Result<(De
     }
 
     let price_precision = get_price_precision(price);
-    let quantity_precision = get_quantity_precision(quantity);
+    let quantity_precision = get_quantity_precision(price);
 
     // Truncate price and quantity to the calculated precision
     let rounded_price = truncate_to_precision(price, price_precision);
@@ -93,6 +93,6 @@ mod tests {
 
         let (price, quantity) = normalize_price_quantity(Decimal::from_str("2748").unwrap(), Decimal::from_str("0.0026").unwrap()).unwrap();
         assert_eq!(price, Decimal::from_str("2748").unwrap());
-        assert_eq!(quantity, Decimal::from_str("0.0026").unwrap());
+        assert_eq!(quantity, Decimal::from_str("0.2").unwrap());
     }
 }
