@@ -1,9 +1,11 @@
+use rust_decimal::Decimal;
+use std::str::FromStr;
+
 use crate::AlphaSecError;
 
 /// Truncate a value to the specified number of decimal places (no rounding)
 fn truncate_to_precision(value: f64, precision: u64) -> f64 {
-    let multiplier = 10_f64.powi(precision as i32);
-    (value * multiplier).trunc() / multiplier
+    Decimal::from_str(&value.to_string()).unwrap().round_dp(precision as u32).to_string().parse::<f64>().unwrap()
 }
 
 /// Normalize price and quantity values by truncating them to appropriate precision
