@@ -31,6 +31,14 @@ pub fn normalize_price_quantity(price: f64, quantity: f64) -> Result<(f64, f64),
             3
         } else if price >= 1.0 {
             4
+        } else if price >= 0.1 {
+            5
+        } else if price >= 0.01 {
+            6
+        } else if price >= 0.001 {
+            7
+        } else if price >= 0.0001 {
+            8
         } else {
             8
         }
@@ -48,7 +56,7 @@ pub fn normalize_price_quantity(price: f64, quantity: f64) -> Result<(f64, f64),
         } else if quantity >= 1.0 {
             1
         } else {
-            5
+            1
         }
     }
 
