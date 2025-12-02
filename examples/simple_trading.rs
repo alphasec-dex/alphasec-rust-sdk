@@ -13,7 +13,8 @@
 
 use alphasec_rust_sdk::{Agent, Config, OrderMode, OrderSide, OrderType};
 use tracing::{error, info};
-
+use std::str::FromStr;
+use rust_decimal::Decimal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -46,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .order(
             "KAIA/USDT",      // market
             OrderSide::Buy,   // side
-            0.9f64,           // price: $0.9
-            5f64,             // quantity: 5 KAIA
+            Decimal::from_str("0.9").unwrap(),           // price: $0.9
+            Decimal::from_str("5").unwrap(),             // quantity: 5 KAIA
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit
@@ -78,8 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match agent
         .modify(
             &example_order_id_modify,
-            1.2f64,          // new_price: $1.2
-            2f64,            // new_qty: 5 KAIA
+            Decimal::from_str("1.2").unwrap(),          // new_price: $1.2
+            Decimal::from_str("2").unwrap(),            // new_qty: 5 KAIA
             OrderMode::Base, // order_mode: Quote
         )
         .await
@@ -96,8 +97,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .order(
             "KAIA/USDT",      // market
             OrderSide::Sell,  // side
-            1.1f64,           // price: $55,000
-            2f64,             // quantity: 1 BTC
+            Decimal::from_str("1.1").unwrap(),           // price: $55,000
+            Decimal::from_str("2").unwrap(),             // quantity: 1 BTC
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit

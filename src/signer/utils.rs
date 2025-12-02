@@ -4,8 +4,8 @@ use std::str::FromStr;
 use crate::AlphaSecError;
 
 /// Truncate a value to the specified number of decimal places (no rounding)
-fn truncate_to_precision(value: f64, precision: u64) -> f64 {
-    Decimal::from_str(&value.to_string()).unwrap().round_dp(precision as u32).to_string().parse::<f64>().unwrap()
+fn truncate_to_precision(value: Decimal, precision: u64) -> Decimal {
+    value.round_dp(precision as u32)
 }
 
 /// Normalize price and quantity values by truncating them to appropriate precision
@@ -21,51 +21,51 @@ fn truncate_to_precision(value: f64, precision: u64) -> f64 {
 /// # Returns
 /// * `Ok((rounded_price, rounded_quantity))` - The normalized values
 /// * `Err(AlphaSecError)` - If price or quantity is negative
-pub fn normalize_price_quantity(price: f64, quantity: f64) -> Result<(f64, f64), AlphaSecError> {
-    fn get_price_precision(price: f64) -> u64 {
-        if price >= 10000.0 {
+pub fn normalize_price_quantity(price: Decimal, quantity: Decimal) -> Result<(Decimal, Decimal), AlphaSecError> {
+    fn get_price_precision(price: Decimal) -> u64 {
+        if price >= Decimal::from_str("10000.0").unwrap() {
             0
-        } else if price >= 1000.0 {
+        } else if price >= Decimal::from_str("1000.0").unwrap() {
             1
-        } else if price >= 100.0 {
+        } else if price >= Decimal::from_str("100.0").unwrap() {
             2
-        } else if price >= 10.0 {
+        } else if price >= Decimal::from_str("10.0").unwrap() {
             3
-        } else if price >= 1.0 {
+        } else if price >= Decimal::from_str("1.0").unwrap() {
             4
-        } else if price >= 0.1 {
+        } else if price >= Decimal::from_str("0.1").unwrap() {
             5
-        } else if price >= 0.01 {
+        } else if price >= Decimal::from_str("0.01").unwrap() {
             6
-        } else if price >= 0.001 {
+        } else if price >= Decimal::from_str("0.001").unwrap() {
             7
-        } else if price >= 0.0001 {
+        } else if price >= Decimal::from_str("0.0001").unwrap() {
             8
         } else {
             8
         }
     }
 
-    fn get_quantity_precision(quantity: f64) -> u64 {
-        if quantity >= 10000.0 {
+    fn get_quantity_precision(quantity: Decimal) -> u64 {
+        if quantity >= Decimal::from_str("10000.0").unwrap() {
             5
-        } else if quantity >= 1000.0 {
+        } else if quantity >= Decimal::from_str("1000.0").unwrap() {
             4
-        } else if quantity >= 100.0 {
+        } else if quantity >= Decimal::from_str("100.0").unwrap() {
             3
-        } else if quantity >= 10.0 {
+        } else if quantity >= Decimal::from_str("10.0").unwrap() {
             2
-        } else if quantity >= 1.0 {
+        } else if quantity >= Decimal::from_str("1.0").unwrap() {
             1
         } else {
             1
         }
     }
 
-    if price < 0.0 {
+    if price < Decimal::from_str("0.0").unwrap() {
         return Err(AlphaSecError::invalid_parameter("Price cannot be negative"));
     }
-    if quantity < 0.0 {
+    if quantity < Decimal::from_str("0.0").unwrap() {
         return Err(AlphaSecError::invalid_parameter(
             "Quantity cannot be negative",
         ));
@@ -87,12 +87,12 @@ mod tests {
 
     #[test]
     fn test_normalize_price_quantity() {
-        let (price, quantity) = normalize_price_quantity(100.0, 1000.0).unwrap();
-        assert_eq!(price, 100.0);
-        assert_eq!(quantity, 1000.0);
+        let (price, quantity) = normalize_price_quantity(Decimal::from_str("100.0").unwrap(), Decimal::from_str("1000.0").unwrap()  ).unwrap();
+        assert_eq!(price, Decimal::from_str("100.0").unwrap());
+        assert_eq!(quantity, Decimal::from_str("1000.0").unwrap());
 
-        let (price, quantity) = normalize_price_quantity(112400.055, 0.2).unwrap();
-        assert_eq!(price, 112400.0);
-        assert_eq!(quantity, 0.2);
+        let (price, quantity) = normalize_price_quantity(Decimal::from_str("2748").unwrap(), Decimal::from_str("0.0026").unwrap()).unwrap();
+        assert_eq!(price, Decimal::from_str("2748").unwrap());
+        assert_eq!(quantity, Decimal::from_str("0.0026").unwrap());
     }
 }

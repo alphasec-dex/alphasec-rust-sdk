@@ -15,6 +15,7 @@ use crate::{
 #[cfg(feature = "websocket")]
 use crate::websocket::{WsConfig, WsManager};
 
+use rust_decimal::Decimal;
 use ethers::{providers::Middleware, signers::LocalWallet, types::U64};
 #[cfg(feature = "websocket")]
 use tokio::sync::mpsc;
@@ -277,13 +278,13 @@ impl Agent {
         &self,
         market: &str,
         side: OrderSide,
-        price: f64,
-        quantity: f64,
+        price: Decimal,
+        quantity: Decimal,
         order_type: OrderType,
         order_mode: OrderMode,
-        tp_limit: Option<f64>,
-        sl_trigger: Option<f64>,
-        sl_limit: Option<f64>,
+        tp_limit: Option<Decimal>,
+        sl_trigger: Option<Decimal>,
+        sl_limit: Option<Decimal>,
     ) -> Result<String> {
         // Convert market to base/quote tokens
         let market_parts: Vec<&str> = market.split('/').collect();
@@ -384,8 +385,8 @@ impl Agent {
     pub async fn modify(
         &self,
         order_id: &str,
-        new_price: f64,
-        new_qty: f64,
+        new_price: Decimal,
+        new_qty: Decimal,
         order_mode: OrderMode,
     ) -> Result<String> {
         let modify_data =
@@ -407,7 +408,7 @@ impl Agent {
     }
 
     /// Transfer value (native token)
-    pub async fn native_transfer(&self, to: &str, value: f64) -> Result<String> {
+    pub async fn native_transfer(&self, to: &str, value: Decimal) -> Result<String> {
         let transfer_data = self.signer.create_value_transfer_data(to, value)?;
         let signed_tx = self
             .signer
@@ -456,9 +457,9 @@ impl Agent {
         &self,
         base_token: &str,
         quote_token: &str,
-        stop_price: f64,
-        price: f64,
-        quantity: f64,
+        stop_price: Decimal,
+        price: Decimal,
+        quantity: Decimal,
         side: OrderSide,
         order_type: OrderType,
         order_mode: OrderMode,

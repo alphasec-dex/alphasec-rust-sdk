@@ -4,7 +4,8 @@
 
 use alphasec_rust_sdk::{Agent, Config};
 use tracing::{error, info, warn};
-
+use std::str::FromStr;
+use rust_decimal::Decimal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -28,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Recipient address (replace with actual address)
     let recipient = "0xbAc1Aef897710759AAf5e6322A0c3EA5f58Df1C3"; // Example address
-    let amount = 0.1f64; // 1 KAIA
+    let amount = Decimal::from_str("0.1").unwrap(); // 1 KAIA
 
     // Value transfer (native KAIA)
     info!("💰 Transferring {} KAIA to {}...", amount, recipient);

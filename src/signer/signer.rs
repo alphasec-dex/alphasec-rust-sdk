@@ -25,6 +25,8 @@ use ethers::{
     signers::{LocalWallet, Signer},
     types::transaction::eip712::{Eip712, TypedData as Eip712TypedData},
 };
+use rust_decimal::Decimal;
+use std::str::FromStr;
 use serde_json;
 use std::{
     sync::{
@@ -185,7 +187,7 @@ impl AlphaSecSigner {
     }
 
     /// Create value transfer data
-    pub fn create_value_transfer_data(&self, to: &str, value: f64) -> Result<Vec<u8>> {
+    pub fn create_value_transfer_data(&self, to: &str, value: Decimal) -> Result<Vec<u8>> {
         let model = ValueTransferModel {
             l1owner: self.l1_address().to_string(), // Use l1_address
             to: to.to_string(),
@@ -221,13 +223,13 @@ impl AlphaSecSigner {
         base_token: &str,
         quote_token: &str,
         side: u32,
-        price: f64,
-        quantity: f64,
+        price: Decimal,
+        quantity: Decimal,
         order_type: u32,
         order_mode: u32,
-        tp_limit: Option<f64>,
-        sl_trigger: Option<f64>,
-        sl_limit: Option<f64>,
+        tp_limit: Option<Decimal>,
+        sl_trigger: Option<Decimal>,
+        sl_limit: Option<Decimal>,
     ) -> Result<Vec<u8>> {
         let tpsl_model = if tp_limit.is_some() || sl_trigger.is_some() {
             Some(TpslModel {
@@ -246,8 +248,8 @@ impl AlphaSecSigner {
             base_token: base_token.to_string(),
             quote_token: quote_token.to_string(),
             side,
-            price: (normalized_price as f64).to_string(),
-            quantity: (normalized_quantity as f64).to_string(),
+            price: normalized_price.to_string(),
+            quantity: normalized_quantity.to_string(),
             order_type,
             order_mode,
             tpsl: tpsl_model,
@@ -295,16 +297,16 @@ impl AlphaSecSigner {
     pub fn create_modify_data(
         &self,
         order_id: &str,
-        new_price: f64,
-        new_qty: f64,
+        new_price: Decimal,
+        new_qty: Decimal,
         order_mode: u32,
     ) -> Result<Vec<u8>> {
         let (normalized_price, normalized_qty) = normalize_price_quantity(new_price, new_qty)?;
         let model = ModifyModel {
             l1owner: self.l1_address().to_string(), // Use l1_address
             order_id: order_id.to_string(),
-            new_price: (normalized_price as f64).to_string(),
-            new_qty: (normalized_qty as f64).to_string(),
+            new_price: normalized_price.to_string(),
+            new_qty: normalized_qty.to_string(),
             order_mode: order_mode as u32,
         };
 
@@ -319,9 +321,9 @@ impl AlphaSecSigner {
         &self,
         base_token: &str,
         quote_token: &str,
-        stop_price: f64,
-        price: f64,
-        quantity: f64,
+        stop_price: Decimal,
+        price: Decimal,
+        quantity: Decimal,
         side: u32,
         order_type: u32,
         order_mode: u32,
@@ -332,9 +334,9 @@ impl AlphaSecSigner {
             l1owner: self.l1_address().to_string(), // Use l1_address
             base_token: base_token.to_string(),
             quote_token: quote_token.to_string(),
-            stop_price: (normalized_stop_price as f64).to_string(),
-            price: (normalized_price as f64).to_string(),
-            quantity: (normalized_quantity as f64).to_string(),
+            stop_price: normalized_stop_price.to_string(),
+            price: normalized_price.to_string(),
+            quantity: normalized_quantity.to_string(),
             side,
             order_type,
             order_mode,
@@ -896,7 +898,7 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         let to = "0xrecipientaddressrecipientaddressrecipient";
-        let value = 1f64; // 1 KAIA
+        let value = Decimal::from_str("1").unwrap(); // 1 KAIA
 
         let result = signer.create_value_transfer_data(to, value);
         assert!(result.is_ok());
@@ -931,8 +933,8 @@ mod tests {
         let base_token = "BTC";
         let quote_token = "USDT";
         let side = 0; // Buy
-        let price = 50000f64; // $50,000
-        let quantity = 1f64; // 1 BTC
+        let price = Decimal::from_str("50000.0").unwrap(); // $50,000
+        let quantity = Decimal::from_str("1").unwrap(); // 1 BTC
         let order_type = 0; // Limit
         let order_mode = 0; // GTC
 
@@ -989,8 +991,8 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         let order_id = "test-order-id-12345";
-        let new_price = 51000f64; // New price $51,000
-        let new_qty = 2f64; // New quantity 2 BTC
+        let new_price = Decimal::from_str("51000").unwrap(); // New price $51,000
+        let new_qty = Decimal::from_str("2").unwrap(); // New quantity 2 BTC
         let order_mode = 1u32; // IOC
 
         let result = signer.create_modify_data(order_id, new_price, new_qty, order_mode);
@@ -1008,9 +1010,9 @@ mod tests {
 
         let base_token = "ETH";
         let quote_token = "USDT";
-        let stop_price = 3000f64; // $3,000
-        let price = 2950f64; // $2,950
-        let quantity = 1f64; // 1 ETH
+        let stop_price = Decimal::from_str("3000").unwrap(); // $3,000
+        let price = Decimal::from_str("2950").unwrap(); // $2,950
+        let quantity = Decimal::from_str("1").unwrap(); // 1 ETH
         let side = 1; // Sell
         let order_type = 1; // Market
         let order_mode = 0; // GTC

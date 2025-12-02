@@ -4,7 +4,8 @@
 
 use alphasec_rust_sdk::{Agent, Config, OrderMode, OrderSide, OrderType};
 use tracing::{error, info, warn};
-
+use std::str::FromStr;
+use rust_decimal::Decimal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -33,8 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .order(
             "GRND/USDT",      // market
             OrderSide::Sell,  // side
-            5.1f64,           // price: $55,000
-            1f64,             // quantity: 1 BTC
+            Decimal::from_str("5.1").unwrap(),           // price: $55,000
+            Decimal::from_str("1").unwrap(),             // quantity: 1 BTC
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit

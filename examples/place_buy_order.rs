@@ -3,6 +3,8 @@
 //! This example demonstrates how to place a single buy order only
 
 use alphasec_rust_sdk::{Agent, Config, OrderMode, OrderSide, OrderType};
+use std::str::FromStr;
+use rust_decimal::Decimal;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -33,8 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .order(
             "KAIA/USDT",      // market
             OrderSide::Buy,   // side
-            1f64,             // price: $1.1
-            1f64,             // quantity: 1 KAIA
+            Decimal::from_str("1.1").unwrap(),             // price: $1.1
+            Decimal::from_str("1").unwrap(),             // quantity: 1 KAIA
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit
