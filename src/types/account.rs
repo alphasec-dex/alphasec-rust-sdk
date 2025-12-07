@@ -75,3 +75,56 @@ impl Session {
         Utc.timestamp_millis_opt(self.expiry as i64).single()
     }
 }
+
+/// Transfer record from /api/v1/wallet/transfer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Transfer {
+    /// Transfer ID
+    pub id: i64,
+    /// Sender address
+    pub from_address: String,
+    /// Recipient address
+    pub to_address: String,
+    /// Transaction type (e.g., "Token Transfer", "Value Transfer")
+    pub tx_type: String,
+    /// Token ID
+    pub token_id: String,
+    /// Transfer amount (as string for precision)
+    pub amount: String,
+    /// Transfer status (e.g., "Success", "Pending")
+    pub status: String,
+    /// Timestamp in milliseconds
+    pub timestamp: i64,
+    /// Transaction hash
+    pub hash: String,
+}
+
+impl Transfer {
+    /// Convert timestamp to DateTime<Utc>
+    pub fn timestamp_datetime(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        use chrono::{TimeZone, Utc};
+        Utc.timestamp_millis_opt(self.timestamp).single()
+    }
+
+    /// Get amount as Decimal (converted from wei)
+    pub fn amount_decimal(&self, decimals: u32) -> Result<Decimal, rust_decimal::Error> {
+        let amount = self.amount.parse::<Decimal>()?;
+        Ok(amount / Decimal::from(10u64.pow(decimals)))
+    }
+}
+
+/// Query parameters for transfer history
+#[derive(Debug, Clone, Default)]
+pub struct TransferHistoryQuery {
+    /// Wallet address to query (required)
+    pub address: String,
+    /// Filter by specific token ID (optional)
+    pub token_id: Option<i64>,
+    /// Start timestamp in milliseconds (optional)
+    pub from_msec: Option<i64>,
+    /// End timestamp in milliseconds (optional)
+    pub to_msec: Option<i64>,
+    /// Maximum records to return (default: 100, max: 500)
+    pub limit: Option<u32>,
+}

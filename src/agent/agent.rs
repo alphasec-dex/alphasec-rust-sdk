@@ -11,6 +11,7 @@ use crate::{
     signer::{AlphaSecSigner, Config},
     types::{account::*, market::*, orders::*, session_commands::SESSION_COMMAND_CREATE},
 };
+pub use crate::types::account::{Transfer, TransferHistoryQuery};
 
 #[cfg(feature = "websocket")]
 use crate::websocket::{WsConfig, WsManager};
@@ -864,6 +865,33 @@ impl Agent {
     /// Get sessions
     pub async fn get_sessions(&self, addr: &str) -> Result<Vec<Session>> {
         self.api.get_sessions(addr).await
+    }
+
+    /// Get transfer history for a wallet address
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - Wallet address to query
+    /// * `token_id` - Optional token ID to filter by
+    /// * `from_msec` - Optional start timestamp in milliseconds
+    /// * `to_msec` - Optional end timestamp in milliseconds
+    /// * `limit` - Optional maximum records to return (default: 100, max: 500)
+    pub async fn get_transfer_history(
+        &self,
+        addr: &str,
+        token_id: Option<i64>,
+        from_msec: Option<i64>,
+        to_msec: Option<i64>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Transfer>> {
+        let query = TransferHistoryQuery {
+            address: addr.to_string(),
+            token_id,
+            from_msec,
+            to_msec,
+            limit,
+        };
+        self.api.get_transfer_history(&query).await
     }
 
     /// Get the signer's L1 address
