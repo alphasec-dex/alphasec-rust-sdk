@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Withdrawing 1.0 KAIA from AlphaSec...");
     // match agent.withdraw_token("KAIA", 1.0).await {
-    match agent.withdraw_token("KAIA", 1.0).await {
+    match agent.withdraw_token("KAIA", 1.0, None).await {
         Ok(result) => info!("✅ Withdrawal successful: 1.0 KAIA, result: {}", result),
         Err(e) => error!("❌ Failed to withdraw KAIA: {}", e),
     };

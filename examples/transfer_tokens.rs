@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 2: Token transfer (USDT)
     info!("🪙 Transferring USDT tokens...");
-    match agent.token_transfer(recipient, 1.55f64, "USDT").await {
+    match agent.token_transfer(recipient, 1.55f64, "USDT", None).await {
         // 1.55 USDT
         Ok(result) => {
             info!(

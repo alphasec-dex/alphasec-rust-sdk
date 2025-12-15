@@ -285,6 +285,7 @@ impl Agent {
         tp_limit: Option<Decimal>,
         sl_trigger: Option<Decimal>,
         sl_limit: Option<Decimal>,
+        timestamp_ms: Option<u64>,
     ) -> Result<String> {
         // Convert market to base/quote tokens
         let market_parts: Vec<&str> = market.split('/').collect();
@@ -330,7 +331,7 @@ impl Agent {
         // Generate and sign transaction
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &order_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &order_data, None)
             .await?;
 
         // Submit order
@@ -346,11 +347,11 @@ impl Agent {
     }
 
     /// Cancel an order
-    pub async fn cancel(&self, order_id: &str) -> Result<String> {
+    pub async fn cancel(&self, order_id: &str, timestamp_ms: Option<u64>) -> Result<String> {
         let cancel_data = self.signer.create_cancel_data(order_id)?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &cancel_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &cancel_data, None)
             .await?;
         let response = self.api.cancel(&signed_tx).await?;
         if response.success {
@@ -364,11 +365,11 @@ impl Agent {
     }
 
     /// Cancel all orders
-    pub async fn cancel_all(&self) -> Result<String> {
+    pub async fn cancel_all(&self, timestamp_ms: Option<u64>) -> Result<String> {
         let cancel_all_data = self.signer.create_cancel_all_data()?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &cancel_all_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &cancel_all_data, None)
             .await?;
         let response = self.api.cancel_all(&signed_tx).await?;
         if response.success {
@@ -388,13 +389,14 @@ impl Agent {
         new_price: Decimal,
         new_qty: Decimal,
         order_mode: OrderMode,
+        timestamp_ms: Option<u64>,
     ) -> Result<String> {
         let modify_data =
             self.signer
                 .create_modify_data(order_id, new_price, new_qty, order_mode as u32)?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &modify_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &modify_data, None)
             .await?;
         let response = self.api.modify(&signed_tx).await?;
         if response.success {
@@ -408,11 +410,11 @@ impl Agent {
     }
 
     /// Transfer value (native token)
-    pub async fn native_transfer(&self, to: &str, value: Decimal) -> Result<String> {
+    pub async fn native_transfer(&self, to: &str, value: Decimal, timestamp_ms: Option<u64>) -> Result<String> {
         let transfer_data = self.signer.create_value_transfer_data(to, value)?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &transfer_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &transfer_data, None)
             .await?;
         let response = self.api.native_transfer(&signed_tx).await?;
         if response.success {
@@ -426,7 +428,7 @@ impl Agent {
     }
 
     /// Transfer tokens
-    pub async fn token_transfer(&self, to: &str, value: f64, token: &str) -> Result<String> {
+    pub async fn token_transfer(&self, to: &str, value: f64, token: &str, timestamp_ms: Option<u64>) -> Result<String> {
         let token_id = self
             .api
             .token_metadata()
@@ -439,7 +441,7 @@ impl Agent {
             .create_token_transfer_data(to, value, token_id)?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &transfer_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &transfer_data, None)
             .await?;
         let response = self.api.token_transfer(&signed_tx).await?;
         if response.success {
@@ -463,6 +465,7 @@ impl Agent {
         side: OrderSide,
         order_type: OrderType,
         order_mode: OrderMode,
+        timestamp_ms: Option<u64>,
     ) -> Result<String> {
         // Convert symbols to token_ids using the metadata
         let token_metadata = self
@@ -494,7 +497,7 @@ impl Agent {
         )?;
         let signed_tx = self
             .signer
-            .generate_alphasec_transaction(None, &stop_data, None)
+            .generate_alphasec_transaction(timestamp_ms, &stop_data, None)
             .await?;
         let response = self.api.stop_order(&signed_tx).await?;
         if response.success {
@@ -686,8 +689,6 @@ impl Agent {
             ethers::providers::Http::new(l1_url.clone()),
         ));
 
-        tracing::info!("token_l1_decimals: {}", token_l1_decimals);
-
         let signed_tx = self
             .signer
             .generate_deposit_transaction(
@@ -732,7 +733,7 @@ impl Agent {
     ///
     /// * `token` - Token symbol (e.g., "KAIA")
     /// * `value` - Amount to withdraw in trading units
-    pub async fn withdraw_token(&self, token: &str, value: f64) -> Result<String> {
+    pub async fn withdraw_token(&self, token: &str, value: f64, timestamp_ms: Option<u64>) -> Result<String> {
         let token_id = self
             .api
             .token_metadata()
@@ -762,7 +763,7 @@ impl Agent {
 
         let signed_tx = self
             .signer
-            .generate_withdraw_transaction(&l1_provider, token_id, value, Some(token_l1_address))
+            .generate_withdraw_transaction(&l1_provider, token_id, value, Some(token_l1_address), timestamp_ms)
             .await?;
 
         let response = self.api.withdraw_token(&signed_tx).await?;

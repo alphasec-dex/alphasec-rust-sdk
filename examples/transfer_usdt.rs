@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Token transfer (USDT)
     info!("🪙 Transferring {} {} to {}...", amount, token, recipient);
-    match agent.token_transfer(recipient, amount, token).await {
+    match agent.token_transfer(recipient, amount, token, None).await {
         Ok(result) => info!(
             "✅ Token transfer successful: {} {} to {}, result: {}",
             amount, token, recipient, result

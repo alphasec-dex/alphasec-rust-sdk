@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Cancel all orders
     info!("🚫 Canceling all open orders...");
-    match agent.cancel_all().await {
+    match agent.cancel_all(None).await {
         Ok(result) => info!("✅ All orders canceled successfully, result: {}", result),
         Err(e) => {
             error!("❌ Failed to cancel all orders: {}", e);

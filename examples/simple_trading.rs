@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None,             // tp_limit
             None,             // sl_trigger
             None,             // sl_limit
+            None,             // timestamp_ms
         )
         .await
     {
@@ -82,6 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Decimal::from_str("1.2").unwrap(),          // new_price: $1.2
             Decimal::from_str("2").unwrap(),            // new_qty: 5 KAIA
             OrderMode::Base, // order_mode: Quote
+            None,             // timestamp_ms
         )
         .await
     {
@@ -104,6 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None,             // tp_limit
             None,             // sl_trigger
             None,             // sl_limit
+            None,             // timestamp_ms
         )
         .await
     {
@@ -117,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 3: Cancel a specific order (you would need a real order ID)
     let example_order_id = order_id.clone();
     info!("🚫 Attempting to cancel order: {}", example_order_id);
-    match agent.cancel(&example_order_id).await {
+    match agent.cancel(&example_order_id, None).await {
         Ok(result) => info!("✅ Order canceled successfully, result: {}", result),
         Err(e) => error!("❌ Failed to cancel order: {}", e),
     }
@@ -127,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 4: Cancel all orders
     info!("🚫 Canceling all open orders...");
-    match agent.cancel_all().await {
+    match agent.cancel_all(None).await {
         Ok(result) => info!("✅ All orders canceled successfully, result: {}", result),
         Err(e) => error!("❌ Failed to cancel all orders: {}", e),
     }

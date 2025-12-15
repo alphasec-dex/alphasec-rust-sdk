@@ -41,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             None,             // tp_limit
             None,             // sl_trigger
             None,             // sl_limit
+            None,             // timestamp_ms
         )
         .await
     {

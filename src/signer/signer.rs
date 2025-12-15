@@ -90,11 +90,6 @@ impl AlphaSecSigner {
             .as_millis() as u64
     }
 
-    /// Generate alphasec-style nonce (timestamp + counter)
-    fn get_alphasec_nonce(&self) -> u64 {
-        Self::current_timestamp_ms() + self.nonce_counter.fetch_add(5, Ordering::SeqCst)
-    }
-
     /// Create EIP-712 typed data for session registration
     fn create_session_register_typed_data(
         &self,
@@ -359,8 +354,7 @@ impl AlphaSecSigner {
             Some(w) => w,
             None => self.get_wallet()?,
         };
-        // let nonce = timestamp_ms.unwrap_or_else(|| self.get_alphasec_nonce());
-        let nonce = timestamp_ms.unwrap_or(self.get_alphasec_nonce());
+        let nonce = timestamp_ms.unwrap_or_else(Self::current_timestamp_ms);
 
         let chain_id = if self.config.chain_id.is_some() {
             self.config.chain_id.unwrap()
@@ -389,6 +383,7 @@ impl AlphaSecSigner {
             chain_id: Some(U64::from(chain_id)),
             access_list: Default::default(),
         };
+        tracing::info!("nonce: {}", nonce);
 
         // Sign the transaction
         let typed_tx = TypedTransaction::Eip1559(tx);
@@ -662,6 +657,7 @@ impl AlphaSecSigner {
         token_id: &str,
         value: f64,
         token_l1_address: Option<&str>,
+        timestamp_ms: Option<u64>,
     ) -> Result<String> {
         let l1_wallet = self.config.l1_wallet.as_ref().ok_or_else(|| {
             AlphaSecError::invalid_parameter("L1 wallet is required for withdraw operations")
@@ -694,10 +690,7 @@ impl AlphaSecSigner {
             let contract = Contract::new(system_address, abi, l2_provider.clone());
 
             // Generate nonce using current timestamp
-            let nonce = (SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()) as u64;
+            let nonce = timestamp_ms.unwrap_or_else(Self::current_timestamp_ms);
 
             // Build transaction
             let l1_address: Address = self.l1_address().parse().unwrap();
@@ -725,7 +718,7 @@ impl AlphaSecSigner {
                     inner.chain_id = Some(U64::from(chain_id));
                     TypedTransaction::Legacy(inner)
                 }
-                TypedTransaction::Eip2930(mut inner) => TypedTransaction::Eip2930(inner),
+                TypedTransaction::Eip2930(inner) => TypedTransaction::Eip2930(inner),
             };
 
             tracing::info!("tx: {:?}", tx);
@@ -765,10 +758,7 @@ impl AlphaSecSigner {
             let contract = Contract::new(router_address, abi, l2_provider.clone());
 
             // Generate nonce using current timestamp
-            let nonce = (SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis()) as u64;
+            let nonce = timestamp_ms.unwrap_or_else(Self::current_timestamp_ms);
 
             // Prepare data for outbound transfer
             let data = Bytes::from_static(b"0x");
@@ -1080,7 +1070,7 @@ mod tests {
 
         // Test that the function compiles and runs (will fail on network call, but that's expected)
         let result = signer
-            .generate_withdraw_transaction(&provider, "1", 1f64, None)
+            .generate_withdraw_transaction(&provider, "1", 1f64, None, None)
             .await;
 
         // We expect this to fail due to network connection, but the function should be callable

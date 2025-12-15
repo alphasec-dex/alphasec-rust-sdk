@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Value transfer (native KAIA)
     info!("💰 Transferring {} KAIA to {}...", amount, recipient);
-    match agent.native_transfer(recipient, amount).await {
+    match agent.native_transfer(recipient, amount, None).await {
         Ok(result) => info!(
             "✅ Value transfer successful: {} KAIA to {}, result: {}",
             amount, recipient, result
