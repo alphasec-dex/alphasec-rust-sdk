@@ -1,17 +1,14 @@
 //! AlphaSec transaction signer with EIP-712 support
 
 use crate::{
-    error::{AlphaSecError, Result},
-    signer::{config::Config, normalize_price_quantity, transaction::*},
-    types::{
-        chain_ids::ALPHASEC_MAINNET_CHAIN_ID,
-        chain_ids::ALPHASEC_TESTNET_CHAIN_ID,
-        constants::{abi::*, l1_contracts::*, ALPHASEC_NATIVE_TOKEN_ID},
+    OrderType, error::{AlphaSecError, Result}, signer::{config::Config, normalize_price_quantity, transaction::*}, types::{
+        chain_ids::{ALPHASEC_MAINNET_CHAIN_ID, ALPHASEC_TESTNET_CHAIN_ID},
+        constants::{ALPHASEC_NATIVE_TOKEN_ID, abi::*, l1_contracts::*},
         dex_commands::*,
         eip712::*,
         gas::*,
         l2_contracts::ALPHASEC_ORDER_CONTRACT_ADDR,
-    },
+    }
 };
 use base64::{self, Engine};
 use ethers::{
@@ -235,7 +232,7 @@ impl AlphaSecSigner {
         } else {
             None
         };
-
+        
         let (normalized_price, normalized_quantity) = normalize_price_quantity(price, quantity)?;
 
         let model = OrderModel {
@@ -244,7 +241,11 @@ impl AlphaSecSigner {
             quote_token: quote_token.to_string(),
             side,
             price: normalized_price.to_string(),
-            quantity: normalized_quantity.to_string(),
+            quantity: if order_type == OrderType::Market as u32 {
+                quantity.to_string()
+            } else {
+                normalized_quantity.to_string()
+            },
             order_type,
             order_mode,
             tpsl: tpsl_model,
@@ -383,7 +384,6 @@ impl AlphaSecSigner {
             chain_id: Some(U64::from(chain_id)),
             access_list: Default::default(),
         };
-        tracing::info!("nonce: {}", nonce);
 
         // Sign the transaction
         let typed_tx = TypedTransaction::Eip1559(tx);
