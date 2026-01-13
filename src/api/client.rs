@@ -5,6 +5,7 @@ use crate::{
     signer::{AlphaSecSigner, Config},
     types::{account::*, api::*, market::*, orders::*},
 };
+pub use crate::types::account::{Transfer, TransferHistoryQuery};
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use std::time::Duration;
@@ -268,6 +269,56 @@ impl ApiClient {
             .map(|session| serde_json::from_value(session.clone()).map_err(AlphaSecError::Json))
             .collect::<Result<Vec<Session>>>()?;
         Ok(sessions)
+    }
+
+    /// Get transfer history for a wallet address on the L2 network
+    ///
+    /// # Arguments
+    /// * `query` - Query parameters including address, optional token_id, time range, and limit
+    ///
+    /// # Returns
+    /// * `Result<Vec<Transfer>>` - List of transfer records
+    pub async fn get_transfer_history(
+        &self,
+        query: &TransferHistoryQuery,
+    ) -> Result<Vec<Transfer>> {
+        let address_str = query.address.clone();
+        let token_id_str = query.token_id.map(|id| id.to_string());
+        let from_str = query.from_msec.map(|ts| ts.to_string());
+        let to_str = query.to_msec.map(|ts| ts.to_string());
+        let limit = query.limit.unwrap_or(100).min(500);
+        let limit_str = limit.to_string();
+
+        let mut params: Vec<(&str, &str)> = vec![("address", address_str.as_str())];
+
+        if let Some(ref token_id) = token_id_str {
+            params.push(("token_id", token_id.as_str()));
+        }
+
+        if let Some(ref from) = from_str {
+            params.push(("from", from.as_str()));
+        }
+
+        if let Some(ref to) = to_str {
+            params.push(("to", to.as_str()));
+        }
+
+        params.push(("limit", limit_str.as_str()));
+
+        let response = self.get("/api/v1/wallet/transfer", Some(&params)).await?;
+
+        if response["result"].is_null() {
+            return Ok(vec![]);
+        }
+
+        let transfers = response["result"]
+            .as_array()
+            .ok_or_else(|| AlphaSecError::api(500, "Invalid transfer history response format"))?
+            .iter()
+            .map(|transfer| serde_json::from_value(transfer.clone()).map_err(AlphaSecError::Json))
+            .collect::<Result<Vec<Transfer>>>()?;
+
+        Ok(transfers)
     }
 
     /// Get open orders
