@@ -3,8 +3,11 @@
 /// AlphaSec contract addresses and constants
 pub mod l2_contracts {
     /// AlphaSec Gateway Router contract address
-    pub const ALPHASEC_GATEWAY_ROUTER_CONTRACT_ADDR: &str =
-        "0xD2b30f9548DEE14093CF903ec70866469EFff97A";
+    pub const ALPHASEC_MAINNET_GATEWAY_ROUTER_CONTRACT_ADDR: &str =
+        "0x9e0648ec6Cd742ccb5EE9f9b3120eaEF014A684d";
+    /// AlphaSec Kairos Gateway Router contract address
+    pub const ALPHASEC_KAIROS_GATEWAY_ROUTER_CONTRACT_ADDR: &str =
+        "0x097209B15FB6cEefba90EA10e4c1c5439E6bC1Ea";
 
     /// AlphaSec Order contract address  
     pub const ALPHASEC_ORDER_CONTRACT_ADDR: &str = "0x00000000000000000000000000000000000000cc";
@@ -20,10 +23,10 @@ pub mod l2_contracts {
 /// L1 contract addresses for deposit/withdrawal
 pub mod l1_contracts {
     /// Mainnet Inbox contract address
-    pub const MAINNET_INBOX_CONTRACT_ADDR: &str = "0x6EE619c6E74e34a802279437e22c98633c28643e";
+    pub const MAINNET_INBOX_CONTRACT_ADDR: &str = "0xe4CD7C744C8016a8E42336c91366fB78a192F426";
 
     /// Kairos Inbox contract address
-    pub const KAIROS_INBOX_CONTRACT_ADDR: &str = "0x6EE619c6E74e34a802279437e22c98633c28643e";
+    pub const KAIROS_INBOX_CONTRACT_ADDR: &str = "0xF6B3519a72989BC5d6591b25F47656585a8deF60";
 
     /// Mainnet ERC20 Gateway contract address
     pub const MAINNET_ERC20_GATEWAY_CONTRACT_ADDR: &str =
@@ -35,11 +38,11 @@ pub mod l1_contracts {
 
     /// Mainnet ERC20 Router contract address
     pub const MAINNET_ERC20_ROUTER_CONTRACT_ADDR: &str =
-        "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
+        "0x35Be945fb1da550a76f1FAD6D3759437d71bA739";
 
     /// Kairos ERC20 Router contract address
     pub const KAIROS_ERC20_ROUTER_CONTRACT_ADDR: &str =
-        "0x6c1f5fef508715b6E1a541594046DB2831f0F6CE";
+        "0x74F972A16a9B902f4B3A2b9546f5a77d98DA1070";
 }
 
 /// Chain IDs for different networks
@@ -99,8 +102,11 @@ pub const ALPHASEC_NATIVE_TOKEN_ID: u32 = 1;
 
 /// Default API endpoints
 pub mod endpoints {
-    /// AlphaSec API base URL
-    pub const ALPHASEC_API_URL: &str = "https://api-testnet.alphasec.trade";
+    /// AlphaSec API testnet URL
+    pub const ALPHASEC_API_TESTNET_URL: &str = "https://api-testnet.alphasec.trade";
+
+    /// AlphaSec API mainnet URL
+    pub const ALPHASEC_API_MAINNET_URL: &str = "https://api.alphasec.trade";
 
     /// AlphaSec mainnet L2 RPC URL
     pub const ALPHASEC_MAINNET_URL: &str = "https://rpc.alphasec.trade";
@@ -109,7 +115,7 @@ pub mod endpoints {
     pub const ALPHASEC_KAIROS_URL: &str = "https://kairos-rpc.alphasec.trade";
 
     /// Kaia mainnet RPC URL
-    pub const KAIA_MAINNET_URL: &str = "https://public-en-cypress.klaytn.net";
+    pub const KAIA_MAINNET_URL: &str = "https://public-en.node.kaia.io";
 
     /// Kaia kairos RPC URL
     pub const KAIA_KAIROS_URL: &str = "https://public-en-kairos.node.kaia.io";

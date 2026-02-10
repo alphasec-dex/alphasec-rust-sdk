@@ -87,6 +87,48 @@ impl AlphaSecSigner {
             .as_millis() as u64
     }
 
+    /// Convert a human `value` (float) to on-chain base units.
+    ///
+    /// Notes:
+    /// - Rejects NaN/inf and negative values.
+    /// - Floors/truncates towards zero (matching previous `as u64` behavior for non-negative values).
+    /// - Returns an error instead of silently saturating on overflow.
+    fn to_onchain_units(value: f64, decimals: u32) -> Result<U256> {
+        if !value.is_finite() {
+            return Err(AlphaSecError::invalid_parameter(
+                "value must be a finite number",
+            ));
+        }
+        if value < 0.0 {
+            return Err(AlphaSecError::invalid_parameter("value must be non-negative"));
+        }
+
+        // Use float math (input is f64 anyway), but validate bounds before converting.
+        let scale = 10_f64.powi(decimals as i32);
+        if !scale.is_finite() {
+            return Err(AlphaSecError::invalid_parameter(
+                "invalid decimals (scale overflow)",
+            ));
+        }
+
+        let scaled = value * scale;
+        if !scaled.is_finite() {
+            return Err(AlphaSecError::invalid_parameter(
+                "value is too large (scaled overflow)",
+            ));
+        }
+
+        // We only support values that fit into u128 because the input is `f64` and cannot
+        // precisely represent larger integers anyway.
+        if scaled > (u128::MAX as f64) {
+            return Err(AlphaSecError::invalid_parameter(
+                "value is too large (exceeds supported range)",
+            ));
+        }
+
+        Ok(U256::from(scaled.trunc() as u128))
+    }
+
     /// Create EIP-712 typed data for session registration
     fn create_session_register_typed_data(
         &self,
@@ -232,7 +274,7 @@ impl AlphaSecSigner {
         } else {
             None
         };
-        
+
         let (normalized_price, normalized_quantity) = normalize_price_quantity(price, quantity)?;
 
         let model = OrderModel {
@@ -421,7 +463,7 @@ impl AlphaSecSigner {
         })?;
 
         let decimals = token_l1_decimals.unwrap_or(18);
-        let value_onchain_unit = (value * 10_f64.powi(decimals as i32)) as u64;
+        let value_onchain_unit = Self::to_onchain_units(value, decimals as u32)?;
 
         if token_id == ALPHASEC_NATIVE_TOKEN_ID.to_string() {
             // Native token deposit
@@ -525,7 +567,7 @@ impl AlphaSecSigner {
                 })?;
 
             // Approve if needed
-            if allowance < value_onchain_unit.into() {
+            if allowance < value_onchain_unit {
                 let l1_address: Address = self.l1_address().parse().unwrap();
                 let nonce = l1_provider
                     .get_transaction_count(l1_address, None)
@@ -672,7 +714,7 @@ impl AlphaSecSigner {
             }
         };
         // All tokens have 18 decimals in AlphaSec L2
-        let value_onchain_unit = (value * 1e18) as u64;
+        let value_onchain_unit = Self::to_onchain_units(value, 18)?;
 
         if token_id == ALPHASEC_NATIVE_TOKEN_ID.to_string() {
             // Native token withdrawal
@@ -743,8 +785,14 @@ impl AlphaSecSigner {
                 ));
             }
 
-            let erc20_router_addr =
-                crate::types::l2_contracts::ALPHASEC_GATEWAY_ROUTER_CONTRACT_ADDR;
+            let erc20_router_addr = match self.config.network {
+                crate::signer::config::Network::Mainnet => {
+                    crate::types::l2_contracts::ALPHASEC_MAINNET_GATEWAY_ROUTER_CONTRACT_ADDR
+                }
+                crate::signer::config::Network::Kairos => {
+                    crate::types::l2_contracts::ALPHASEC_KAIROS_GATEWAY_ROUTER_CONTRACT_ADDR
+                }
+            };
 
             // Parse L2 ERC20 Router ABI and create contract instance
             let abi: Abi = serde_json::from_str(L2_ERC20_ROUTER_ABI).map_err(|e| {
@@ -761,7 +809,8 @@ impl AlphaSecSigner {
             let nonce = timestamp_ms.unwrap_or_else(Self::current_timestamp_ms);
 
             // Prepare data for outbound transfer
-            let data = Bytes::from_static(b"0x");
+            // Must be empty bytes (NOT ASCII "0x", which becomes 0x3078 in calldata).
+            let data = Bytes::from_static(&[]);
             let token_address: Address = token_l1_addr.parse().map_err(|e| {
                 AlphaSecError::invalid_address(&format!("Invalid token address: {}", e))
             })?;
@@ -817,7 +866,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::signer::Config;
+    use crate::{endpoints, signer::Config};
 
     fn create_test_config() -> Config {
         // These are well-known test keys from Hardhat/Anvil - DO NOT USE IN PRODUCTION
@@ -1047,7 +1096,7 @@ mod tests {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
-        let url = url::Url::parse("https://public-en-kairos.node.kaia.io").unwrap();
+        let url = url::Url::parse(endpoints::KAIA_KAIROS_URL).unwrap();
         let http = ethers::providers::Http::new(url);
         let provider = Arc::new(ethers::providers::Provider::new(http));
 
@@ -1064,7 +1113,7 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         // Use a mock provider URL that will fail but we can test the function structure
-        let url = url::Url::parse("http://app-testnet.alphasec.trade").unwrap();
+        let url = url::Url::parse(endpoints::ALPHASEC_API_TESTNET_URL).unwrap();
         let http = ethers::providers::Http::new(url);
         let provider = Arc::new(ethers::providers::Provider::new(http));
 

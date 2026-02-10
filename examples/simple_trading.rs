@@ -47,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .order(
             "KAIA/USDT",      // market
             OrderSide::Buy,   // side
-            Decimal::from_str("0.9").unwrap(),           // price: $0.9
-            Decimal::from_str("5").unwrap(),             // quantity: 5 KAIA
+            Decimal::from_str("1").unwrap(),           // price: $0.9
+            Decimal::from_str("1").unwrap(),             // quantity: 5 KAIA
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit
@@ -77,19 +77,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "✏️  Attempting to modify order: {}",
         example_order_id_modify
     );
-    match agent
+    let modified_order_id = match agent
         .modify(
             &example_order_id_modify,
-            Decimal::from_str("1.2").unwrap(),          // new_price: $1.2
-            Decimal::from_str("2").unwrap(),            // new_qty: 5 KAIA
+            Decimal::from_str("1.01").unwrap(),          // new_price: $1.2
+            Decimal::from_str("1").unwrap(),            // new_qty: 5 KAIA
             OrderMode::Base, // order_mode: Quote
             None,             // timestamp_ms
         )
         .await
     {
-        Ok(result) => info!("✅ Order modified successfully, result: {}", result),
-        Err(e) => error!("❌ Failed to modify order: {}", e),
-    }
+        Ok(result) => {
+            info!("✅ Order modified successfully, result: {}", result);
+            result
+        }
+        Err(e) => {
+            error!("❌ Failed to modify order: {}", e);
+            return Err(e.into())
+        }
+    };
     // Wait a bit between orders
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
@@ -100,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "KAIA/USDT",      // market
             OrderSide::Sell,  // side
             Decimal::from_str("1.1").unwrap(),           // price: $55,000
-            Decimal::from_str("2").unwrap(),             // quantity: 1 BTC
+            Decimal::from_str("1").unwrap(),             // quantity: 1 BTC
             OrderType::Limit, // order type
             OrderMode::Base,  // base token mode
             None,             // tp_limit
@@ -118,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
     // Example 3: Cancel a specific order (you would need a real order ID)
-    let example_order_id = order_id.clone();
+    let example_order_id = modified_order_id.clone();
     info!("🚫 Attempting to cancel order: {}", example_order_id);
     match agent.cancel(&example_order_id, None).await {
         Ok(result) => info!("✅ Order canceled successfully, result: {}", result),

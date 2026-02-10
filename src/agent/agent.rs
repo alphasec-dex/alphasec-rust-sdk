@@ -16,8 +16,8 @@ pub use crate::types::account::{Transfer, TransferHistoryQuery};
 #[cfg(feature = "websocket")]
 use crate::websocket::{WsConfig, WsManager};
 
-use rust_decimal::Decimal;
 use ethers::{providers::Middleware, signers::LocalWallet, types::U64};
+use rust_decimal::Decimal;
 #[cfg(feature = "websocket")]
 use tokio::sync::mpsc;
 
@@ -411,7 +411,12 @@ impl Agent {
     }
 
     /// Transfer value (native token)
-    pub async fn native_transfer(&self, to: &str, value: Decimal, timestamp_ms: Option<u64>) -> Result<String> {
+    pub async fn native_transfer(
+        &self,
+        to: &str,
+        value: Decimal,
+        timestamp_ms: Option<u64>,
+    ) -> Result<String> {
         let transfer_data = self.signer.create_value_transfer_data(to, value)?;
         let signed_tx = self
             .signer
@@ -429,7 +434,13 @@ impl Agent {
     }
 
     /// Transfer tokens
-    pub async fn token_transfer(&self, to: &str, value: f64, token: &str, timestamp_ms: Option<u64>) -> Result<String> {
+    pub async fn token_transfer(
+        &self,
+        to: &str,
+        value: f64,
+        token: &str,
+        timestamp_ms: Option<u64>,
+    ) -> Result<String> {
         let token_id = self
             .api
             .token_metadata()
@@ -734,7 +745,12 @@ impl Agent {
     ///
     /// * `token` - Token symbol (e.g., "KAIA")
     /// * `value` - Amount to withdraw in trading units
-    pub async fn withdraw_token(&self, token: &str, value: f64, timestamp_ms: Option<u64>) -> Result<String> {
+    pub async fn withdraw_token(
+        &self,
+        token: &str,
+        value: f64,
+        timestamp_ms: Option<u64>,
+    ) -> Result<String> {
         let token_id = self
             .api
             .token_metadata()
@@ -764,7 +780,13 @@ impl Agent {
 
         let signed_tx = self
             .signer
-            .generate_withdraw_transaction(&l1_provider, token_id, value, Some(token_l1_address), timestamp_ms)
+            .generate_withdraw_transaction(
+                &l1_provider,
+                token_id,
+                value,
+                Some(token_l1_address),
+                timestamp_ms,
+            )
             .await?;
 
         let response = self.api.withdraw_token(&signed_tx).await?;

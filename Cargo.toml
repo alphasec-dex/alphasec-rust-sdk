@@ -24,7 +24,9 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 # Ethereum cryptography and signing (avoid rustls to prevent pulling ring)
-ethers = { version = "2.0", default-features = false }
+# NOTE: `ethers` needs a TLS backend feature for HTTPS RPC URLs.
+# `native-tls` is NOT a valid `ethers` feature; use `openssl` or the default `rustls`.
+ethers = { version = "2.0", default-features = false, features = ["openssl"] }
 hex = "0.4"
 
 # Time and UUID

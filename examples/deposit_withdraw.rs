@@ -1,4 +1,4 @@
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rust_sdk::{endpoints, Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting AlphaSec deposit with withdraw example");
 
     let config = Config::new(
-        "https://api-testnet.alphasec.trade",
+        endpoints::ALPHASEC_API_TESTNET_URL,
         "kairos",
         "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your L1 address
         Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
