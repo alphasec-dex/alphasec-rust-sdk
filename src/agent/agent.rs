@@ -766,6 +766,13 @@ impl Agent {
             .token_id_address_map
             .get(token_id)
             .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
+        let token_l1_decimals = self
+            .api
+            .token_metadata()
+            .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
+            .token_id_decimal_map
+            .get(token_id)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?;
         let l1_url = match self.config.network {
             crate::signer::config::Network::Mainnet => endpoints::KAIA_MAINNET_URL,
             crate::signer::config::Network::Kairos => endpoints::KAIA_KAIROS_URL,
@@ -785,6 +792,7 @@ impl Agent {
                 token_id,
                 value,
                 Some(token_l1_address),
+                Some(token_l1_decimals.parse::<u8>().unwrap_or(18)),
                 timestamp_ms,
             )
             .await?;

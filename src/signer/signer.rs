@@ -699,6 +699,7 @@ impl AlphaSecSigner {
         token_id: &str,
         value: f64,
         token_l1_address: Option<&str>,
+        token_l1_decimals: Option<u8>,
         timestamp_ms: Option<u64>,
     ) -> Result<String> {
         let l1_wallet = self.config.l1_wallet.as_ref().ok_or_else(|| {
@@ -713,8 +714,14 @@ impl AlphaSecSigner {
                 crate::signer::config::Network::Kairos => ALPHASEC_TESTNET_CHAIN_ID,
             }
         };
-        // All tokens have 18 decimals in AlphaSec L2
-        let value_onchain_unit = Self::to_onchain_units(value, 18)?;
+        // For ERC20 tokens, use L1 decimals if provided (e.g., USDT has 6 decimals on L1)
+        // For native tokens, always use 18 decimals
+        let decimals = if token_id == ALPHASEC_NATIVE_TOKEN_ID.to_string() {
+            18
+        } else {
+            token_l1_decimals.unwrap_or(18) as u32
+        };
+        let value_onchain_unit = Self::to_onchain_units(value, decimals)?;
 
         if token_id == ALPHASEC_NATIVE_TOKEN_ID.to_string() {
             // Native token withdrawal
@@ -1119,7 +1126,7 @@ mod tests {
 
         // Test that the function compiles and runs (will fail on network call, but that's expected)
         let result = signer
-            .generate_withdraw_transaction(&provider, "1", 1f64, None, None)
+            .generate_withdraw_transaction(&provider, "1", 1f64, None, Some(18), None)
             .await;
 
         // We expect this to fail due to network connection, but the function should be callable
