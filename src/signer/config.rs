@@ -46,8 +46,11 @@ pub struct Config {
     /// API base URL
     pub api_url: Url,
 
-    /// WebSocket URL for real-time data  
+    /// WebSocket URL for real-time data
     pub ws_url: Url,
+
+    /// WebSocket API URL for trade operations (`/ws-api`)
+    pub ws_api_url: Url,
 
     /// Network (mainnet or kairos)
     pub network: Network,
@@ -112,6 +115,23 @@ impl Config {
             url
         };
 
+        // Derive WebSocket Trade API URL (/ws-api) for low-latency order operations
+        let ws_api_url = {
+            let mut url = api_url.clone();
+            match url.scheme() {
+                "https" => url.set_scheme("wss").unwrap(),
+                "http" => url.set_scheme("ws").unwrap(),
+                _ => return Err(AlphaSecError::config("Unsupported URL scheme")),
+            }
+            let path = if url.path() == "/" {
+                "/ws-api".to_string()
+            } else {
+                format!("{}/ws-api", url.path().trim_end_matches('/'))
+            };
+            url.set_path(&path);
+            url
+        };
+
         let network = Network::from_str(_network)?;
 
         // Validate L1 address format (only if we won't derive from key below)
@@ -140,6 +160,7 @@ impl Config {
             chain_id,
             api_url,
             ws_url,
+            ws_api_url,
             network,
             l1_address: resolved_l1_address,
             l1_wallet,

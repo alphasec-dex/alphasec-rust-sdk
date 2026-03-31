@@ -16,13 +16,16 @@ pub use crate::types::account::{Transfer, TransferHistoryQuery};
 #[cfg(feature = "websocket")]
 use crate::websocket::{WsConfig, WsManager};
 
+#[cfg(feature = "websocket")]
+use crate::websocket::trade::TradeWebSocket;
+
 use ethers::{providers::Middleware, signers::LocalWallet, types::U64};
 use rust_decimal::Decimal;
 #[cfg(feature = "websocket")]
 use tokio::sync::mpsc;
 
 use tokio::time::{sleep, Duration};
-use tracing::info;
+use tracing::{info, warn};
 
 /// Main Agent for AlphaSec operations
 ///
@@ -37,6 +40,9 @@ pub struct Agent {
     /// WebSocket manager for real-time data
     #[cfg(feature = "websocket")]
     ws: Option<WsManager>,
+    /// WebSocket Trade API for low-latency order operations
+    #[cfg(feature = "websocket")]
+    trade_ws: Option<TradeWebSocket>,
     /// Configuration
     config: Config,
 }
@@ -99,6 +105,8 @@ impl Agent {
             signer,
             #[cfg(feature = "websocket")]
             ws,
+            #[cfg(feature = "websocket")]
+            trade_ws: None,
             config,
         })
     }
@@ -260,6 +268,75 @@ impl Agent {
         }
     }
 
+    // === Trade WebSocket ===
+
+    /// Enable the Trade WebSocket for low-latency order operations.
+    /// When enabled, `order()`, `cancel()`, `cancel_all()`, and `modify()` will
+    /// attempt to use the WebSocket first, falling back to REST on connection errors.
+    #[cfg(feature = "websocket")]
+    pub fn enable_trade_ws(&mut self) {
+        let trade_ws = TradeWebSocket::new(self.config.ws_api_url.as_str());
+        self.trade_ws = Some(trade_ws);
+        info!("🚀 Trade WebSocket enabled: {}", self.config.ws_api_url);
+    }
+
+    /// Connect (or reconnect) the Trade WebSocket. Single attempt.
+    #[cfg(feature = "websocket")]
+    pub async fn connect_trade_ws(&self) -> crate::error::Result<()> {
+        if let Some(ref trade_ws) = self.trade_ws {
+            trade_ws.connect().await
+        } else {
+            Err(crate::error::AlphaSecError::network("Trade WebSocket not enabled"))
+        }
+    }
+
+    /// Check if the Trade WebSocket is connected
+    #[cfg(feature = "websocket")]
+    pub async fn is_trade_ws_connected(&self) -> bool {
+        if let Some(ref trade_ws) = self.trade_ws {
+            trade_ws.is_connected().await
+        } else {
+            false
+        }
+    }
+
+    /// Try to submit a signed transaction via Trade WebSocket.
+    /// Returns `Some(Ok(result))` on success, `Some(Err(e))` on API error,
+    /// or `None` on connection error (caller should fallback to REST).
+    #[cfg(feature = "websocket")]
+    async fn try_trade_ws(&self, method: &str, signed_tx: &str) -> Option<Result<String>> {
+        let trade_ws = self.trade_ws.as_ref()?;
+        if !trade_ws.is_connected().await {
+            return None;
+        }
+
+        let req_id = uuid::Uuid::new_v4().to_string();
+        let msg = serde_json::json!({
+            "method": method,
+            "params": {"tx": signed_tx},
+            "id": &req_id
+        })
+        .to_string();
+
+        match trade_ws.send_request(&req_id, msg).await {
+            Ok(response) => {
+                if let Some(err) = response.error {
+                    // API-level error: don't fallback, return error directly
+                    Some(Err(AlphaSecError::api(err.code, err.message)))
+                } else if let Some(result) = response.result {
+                    Some(Ok(result))
+                } else {
+                    Some(Ok(String::new()))
+                }
+            }
+            Err(e) => {
+                // Connection-level error: fallback to REST
+                warn!("Trade WS {} failed, falling back to REST: {}", method, e);
+                None
+            }
+        }
+    }
+
     // === Trading API Helpers ===
 
     /// Place an order
@@ -335,7 +412,12 @@ impl Agent {
             .generate_alphasec_transaction(timestamp_ms, &order_data, None)
             .await?;
 
-        // Submit order
+        // Try Trade WebSocket first, fallback to REST
+        #[cfg(feature = "websocket")]
+        if let Some(result) = self.try_trade_ws("order.place", &signed_tx).await {
+            return result;
+        }
+
         let response = self.api.order(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
@@ -354,6 +436,13 @@ impl Agent {
             .signer
             .generate_alphasec_transaction(timestamp_ms, &cancel_data, None)
             .await?;
+
+        // Try Trade WebSocket first, fallback to REST
+        #[cfg(feature = "websocket")]
+        if let Some(result) = self.try_trade_ws("order.cancel", &signed_tx).await {
+            return result;
+        }
+
         let response = self.api.cancel(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
@@ -372,6 +461,13 @@ impl Agent {
             .signer
             .generate_alphasec_transaction(timestamp_ms, &cancel_all_data, None)
             .await?;
+
+        // Try Trade WebSocket first, fallback to REST
+        #[cfg(feature = "websocket")]
+        if let Some(result) = self.try_trade_ws("order.cancelAll", &signed_tx).await {
+            return result;
+        }
+
         let response = self.api.cancel_all(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
@@ -399,6 +495,13 @@ impl Agent {
             .signer
             .generate_alphasec_transaction(timestamp_ms, &modify_data, None)
             .await?;
+
+        // Try Trade WebSocket first, fallback to REST
+        #[cfg(feature = "websocket")]
+        if let Some(result) = self.try_trade_ws("order.modify", &signed_tx).await {
+            return result;
+        }
+
         let response = self.api.modify(&signed_tx).await?;
         if response.success {
             Ok(response.result_string())
