@@ -386,6 +386,116 @@ impl AlphaSecSigner {
             .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
+    // =========================================================================
+    // Perp commands
+    // =========================================================================
+
+    /// Create perp order data (0x41)
+    ///
+    /// price/quantity are pre-formatted 18-decimal big.Int strings.
+    pub fn create_perp_order_data(
+        &self,
+        market_id: u64,
+        side: u8,
+        price: &str,
+        quantity: &str,
+        is_reduce_only: bool,
+        time_in_force: u8,
+        client_order_id: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpOrderModel;
+        let model = PerpOrderModel {
+            l1owner: self.l1_address().to_string(),
+            market_id,
+            side,
+            price: price.to_string(),
+            quantity: quantity.to_string(),
+            is_reduce_only,
+            time_in_force,
+            client_order_id: client_order_id.map(|s| s.to_string()),
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp cancel data (0x42)
+    pub fn create_perp_cancel_data(
+        &self,
+        market_id: u64,
+        order_id: &str,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpCancelModel;
+        let model = PerpCancelModel {
+            l1owner: self.l1_address().to_string(),
+            market_id,
+            order_id: order_id.to_string(),
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp cancel all data (0x43)
+    pub fn create_perp_cancel_all_data(
+        &self,
+        market_id: u64,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpCancelAllModel;
+        let model = PerpCancelAllModel {
+            l1owner: self.l1_address().to_string(),
+            market_id,
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp set leverage data (0x45)
+    pub fn create_perp_set_leverage_data(
+        &self,
+        market_id: u64,
+        leverage: u32,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpSetLeverageModel;
+        let model = PerpSetLeverageModel {
+            l1owner: self.l1_address().to_string(),
+            market_id,
+            leverage,
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp deposit data (0x12) — Spot→Perp
+    ///
+    /// token: token identifier (e.g., "2" for USDT)
+    /// amount: 18-decimal big.Int string
+    pub fn create_perp_deposit_data(
+        &self,
+        token: &str,
+        amount: &str,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpDepositModel;
+        let model = PerpDepositModel {
+            l1owner: self.l1_address().to_string(),
+            token: token.to_string(),
+            amount: amount.to_string(),
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp withdraw data (0x44) — Perp→Spot
+    ///
+    /// token: token identifier (e.g., "2" for USDT)
+    /// amount: 18-decimal big.Int string
+    pub fn create_perp_withdraw_data(
+        &self,
+        token: &str,
+        amount: &str,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpWithdrawModel;
+        let model = PerpWithdrawModel {
+            l1owner: self.l1_address().to_string(),
+            token: token.to_string(),
+            amount: amount.to_string(),
+        };
+        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
     /// Generate AlphaSec transaction
     pub async fn generate_alphasec_transaction(
         &self,
@@ -1134,5 +1244,310 @@ mod tests {
 
         println!("result: {:#?}", result);
         assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // Perp command tests
+    // =========================================================================
+
+    #[test]
+    fn test_create_perp_order_data_command_byte_is_0x41() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_order_data(
+            1,    // market_id
+            0,    // side: Buy
+            "42000500000000000000000", // price: 42000.5 in 18dec
+            "10000000000000000",       // quantity: 0.01 in 18dec
+            false,
+            2,    // POST
+            Some("coid-abc"),
+        );
+
+        assert!(result.is_ok(), "create_perp_order_data returned Err: {:?}", result.err());
+        let data = result.unwrap();
+        assert!(!data.is_empty());
+        assert_eq!(data[0], 0x41, "first byte must be DEX_COMMAND_PERP_ORDER (0x41)");
+    }
+
+    #[test]
+    fn test_create_perp_order_data_json_fields_are_correct() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_order_data(
+            7,
+            1,    // side: Sell
+            "2000000000000000000000",  // price: 2000 in 18dec
+            "500000000000000000",      // quantity: 0.5 in 18dec
+            true,
+            1,    // IOC
+            Some("order-xyz"),
+        );
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+
+        // Bytes after the command byte are JSON
+        let json: serde_json::Value = serde_json::from_slice(&data[1..])
+            .expect("payload after command byte must be valid JSON");
+
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(json["marketId"], 7u64);
+        assert_eq!(json["side"], 1u8);
+        assert_eq!(json["isReduceOnly"], true);
+        assert_eq!(json["timeInForce"], 1u8);
+        assert_eq!(json["clientOrderId"], "order-xyz");
+        // price/quantity are raw numbers for Go big.Int compat — check raw bytes
+        let raw_json = std::str::from_utf8(&data[1..]).unwrap();
+        assert!(raw_json.contains("\"price\":2000000000000000000000"), "price must be raw number, got: {}", raw_json);
+        assert!(raw_json.contains("\"quantity\":500000000000000000"), "qty must be raw number, got: {}", raw_json);
+    }
+
+    #[test]
+    fn test_create_perp_order_data_without_client_order_id_omits_field() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_order_data(
+            1, 0, "1000000000000000000000", "100000000000000000", false, 0, None,
+        );
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        // clientOrderId must not appear when None (skip_serializing_if)
+        assert!(
+            json.get("clientOrderId").is_none(),
+            "clientOrderId must be absent when not provided"
+        );
+    }
+
+    #[test]
+    fn test_create_perp_cancel_data_command_byte_is_0x42() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_cancel_data(
+            1,
+            "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        );
+
+        assert!(result.is_ok(), "create_perp_cancel_data returned Err: {:?}", result.err());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x42, "first byte must be DEX_COMMAND_PERP_CANCEL (0x42)");
+    }
+
+    #[test]
+    fn test_create_perp_cancel_data_json_fields_are_correct() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let order_id = "0xabcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234";
+        let result = signer.create_perp_cancel_data(3, order_id);
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(json["marketId"], 3u64);
+        assert_eq!(json["orderId"], order_id);
+    }
+
+    #[test]
+    fn test_create_perp_cancel_all_data_command_byte_is_0x43() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_cancel_all_data(1);
+
+        assert!(result.is_ok(), "create_perp_cancel_all_data returned Err: {:?}", result.err());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x43, "first byte must be DEX_COMMAND_PERP_CANCEL_ALL (0x43)");
+    }
+
+    #[test]
+    fn test_create_perp_cancel_all_data_market_id_zero_cancels_all_markets() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_cancel_all_data(0); // 0 = all markets
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x43);
+
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+        assert_eq!(json["marketId"], 0u64);
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+    }
+
+    #[test]
+    fn test_create_perp_set_leverage_data_command_byte_is_0x45() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_set_leverage_data(1, 10);
+
+        assert!(result.is_ok(), "create_perp_set_leverage_data returned Err: {:?}", result.err());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x45, "first byte must be DEX_COMMAND_PERP_SET_LEVERAGE (0x45)");
+    }
+
+    #[test]
+    fn test_create_perp_set_leverage_data_json_fields_are_correct() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_set_leverage_data(2, 50);
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(json["marketId"], 2u64);
+        assert_eq!(json["leverage"], 50u32);
+    }
+
+    #[test]
+    fn test_perp_order_model_to_wire_camel_case_field_names() {
+        use crate::signer::perp_transaction::PerpOrderModel;
+
+        let model = PerpOrderModel {
+            l1owner: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266".to_string(),
+            market_id: 1,
+            side: 0,
+            price: "1000000000000000000000".to_string(),
+            quantity: "100000000000000000".to_string(),
+            is_reduce_only: false,
+            time_in_force: 2,
+            client_order_id: Some("my-coid".to_string()),
+        };
+
+        let wire = model.to_wire().expect("to_wire must not fail");
+        assert_eq!(wire[0], 0x41);
+
+        let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
+
+        // Verify camelCase rename attributes are applied
+        assert!(json.get("marketId").is_some(),      "marketId must be camelCase");
+        assert!(json.get("market_id").is_none(),     "snake_case market_id must not appear");
+        assert!(json.get("isReduceOnly").is_some(),  "isReduceOnly must be camelCase");
+        assert!(json.get("is_reduce_only").is_none(),"snake_case is_reduce_only must not appear");
+        assert!(json.get("timeInForce").is_some(),   "timeInForce must be camelCase");
+        assert!(json.get("time_in_force").is_none(), "snake_case time_in_force must not appear");
+        assert!(json.get("clientOrderId").is_some(), "clientOrderId must be camelCase");
+        assert!(json.get("client_order_id").is_none(),"snake_case client_order_id must not appear");
+
+        // Values round-trip correctly
+        assert_eq!(json["marketId"], 1u64);
+        assert_eq!(json["isReduceOnly"], false);
+        assert_eq!(json["timeInForce"], 2u8);
+        assert_eq!(json["clientOrderId"], "my-coid");
+    }
+
+    #[test]
+    fn test_perp_cancel_model_to_wire_camel_case_field_names() {
+        use crate::signer::perp_transaction::PerpCancelModel;
+
+        let model = PerpCancelModel {
+            l1owner: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266".to_string(),
+            market_id: 5,
+            order_id: "0xdeadbeef".to_string(),
+        };
+
+        let wire = model.to_wire().expect("to_wire must not fail");
+        assert_eq!(wire[0], 0x42);
+
+        let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
+        assert!(json.get("marketId").is_some(), "marketId must be camelCase");
+        assert!(json.get("market_id").is_none(), "snake_case market_id must not appear");
+        assert!(json.get("orderId").is_some(), "orderId must be camelCase");
+        assert!(json.get("order_id").is_none(), "snake_case order_id must not appear");
+    }
+
+    #[test]
+    fn test_perp_set_leverage_model_to_wire_camel_case_field_names() {
+        use crate::signer::perp_transaction::PerpSetLeverageModel;
+
+        let model = PerpSetLeverageModel {
+            l1owner: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266".to_string(),
+            market_id: 1,
+            leverage: 25,
+        };
+
+        let wire = model.to_wire().expect("to_wire must not fail");
+        assert_eq!(wire[0], 0x45);
+
+        let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
+        assert!(json.get("marketId").is_some(), "marketId must be camelCase");
+        assert!(json.get("market_id").is_none(), "snake_case market_id must not appear");
+        assert_eq!(json["leverage"], 25u32);
+    }
+
+    // ---- Perp deposit/withdraw tests ----
+
+    #[test]
+    fn test_create_perp_deposit_data_command_byte_is_0x12() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_deposit_data("2", "1000000000000000000000");
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x12, "command byte must be 0x12 for PerpDeposit");
+    }
+
+    #[test]
+    fn test_create_perp_deposit_data_json_fields_are_correct() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_deposit_data("2", "5000000000000000000000");
+        assert!(result.is_ok());
+        let data = result.unwrap();
+
+        let json: serde_json::Value = serde_json::from_slice(&data[1..])
+            .expect("payload after command byte must be valid JSON");
+
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(json["token"], "2");
+        // amount is raw number for Go big.Int compat — check raw bytes
+        let raw_json = std::str::from_utf8(&data[1..]).unwrap();
+        assert!(raw_json.contains("\"amount\":5000000000000000000000"), "amount must be raw number, got: {}", raw_json);
+    }
+
+    #[test]
+    fn test_create_perp_withdraw_data_command_byte_is_0x44() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_withdraw_data("2", "1000000000000000000000");
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data[0], 0x44, "command byte must be 0x44 for PerpWithdraw");
+    }
+
+    #[test]
+    fn test_create_perp_withdraw_data_json_fields_are_correct() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let result = signer.create_perp_withdraw_data("2", "3000000000000000000000");
+        assert!(result.is_ok());
+        let data = result.unwrap();
+
+        let json: serde_json::Value = serde_json::from_slice(&data[1..])
+            .expect("payload after command byte must be valid JSON");
+
+        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(json["token"], "2");
+        // amount is raw number for Go big.Int compat — check raw bytes
+        let raw_json = std::str::from_utf8(&data[1..]).unwrap();
+        assert!(raw_json.contains("\"amount\":3000000000000000000000"), "amount must be raw number, got: {}", raw_json);
     }
 }

@@ -95,6 +95,30 @@ pub mod dex_commands {
 
     /// Stop order command (alphasec style)
     pub const DEX_COMMAND_STOP_ORDER: u8 = 0x25;
+
+    // Perp commands
+    /// Perp deposit command (Spot→Perp)
+    pub const DEX_COMMAND_PERP_DEPOSIT: u8 = 0x12;
+    /// Perp order command
+    pub const DEX_COMMAND_PERP_ORDER: u8 = 0x41;
+    /// Perp cancel command
+    pub const DEX_COMMAND_PERP_CANCEL: u8 = 0x42;
+    /// Perp cancel all command
+    pub const DEX_COMMAND_PERP_CANCEL_ALL: u8 = 0x43;
+    /// Perp withdraw command (Perp→Spot)
+    pub const DEX_COMMAND_PERP_WITHDRAW: u8 = 0x44;
+    /// Perp set leverage command
+    pub const DEX_COMMAND_PERP_SET_LEVERAGE: u8 = 0x45;
+    /// Perp set margin type command
+    pub const DEX_COMMAND_PERP_SET_MARGIN_TYPE: u8 = 0x46;
+    /// Perp update isolated margin command
+    pub const DEX_COMMAND_PERP_UPDATE_ISOLATED_MARGIN: u8 = 0x47;
+    /// Perp trigger order command
+    pub const DEX_COMMAND_PERP_TRIGGER_ORDER: u8 = 0x48;
+    /// Perp trigger batch command
+    pub const DEX_COMMAND_PERP_TRIGGER_BATCH: u8 = 0x49;
+    /// Perp position TP/SL command
+    pub const DEX_COMMAND_PERP_POSITION_TPSL: u8 = 0x4B;
 }
 
 /// Native token ID
