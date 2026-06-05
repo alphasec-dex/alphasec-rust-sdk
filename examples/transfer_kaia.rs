@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to transfer native KAIA tokens only
 
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info, warn};
 use std::str::FromStr;
 use rust_decimal::Decimal;

@@ -1,4 +1,4 @@
-use alphasec_rust_sdk::{endpoints, Agent, Config};
+use alphasec_rs::{endpoints, Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]

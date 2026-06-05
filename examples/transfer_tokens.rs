@@ -10,7 +10,7 @@
 //  3. Make sure you have sufficient balance
 //  4. Run: cargo run --example transfer_tokens
 
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info, warn};
 
 #[tokio::main]

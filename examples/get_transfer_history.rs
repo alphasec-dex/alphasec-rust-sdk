@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to fetch wallet transfer history on the L2 network
 
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]

@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to place a single buy order only
 
-use alphasec_rust_sdk::{Agent, Config, OrderMode, OrderSide, OrderType};
+use alphasec_rs::{Agent, Config, OrderMode, OrderSide, OrderType};
 use std::str::FromStr;
 use rust_decimal::Decimal;
 use tracing::{error, info};

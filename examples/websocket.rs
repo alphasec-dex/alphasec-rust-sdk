@@ -1,6 +1,6 @@
 //! This example demonstrates how to use the WebSocket client in a channel-based
 
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tokio::time::{Duration, Instant, interval, sleep};
 use tracing::{error, info, Level};
 use tokio_tungstenite::tungstenite::Message;
@@ -76,23 +76,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             message_count += 1;
 
             match message {
-                alphasec_rust_sdk::types::WebSocketMessage::Ack { id, result } => {
+                alphasec_rs::types::WebSocketMessage::Ack { id, result } => {
                     info!(
                         "📡 Subscription ack #{}: id={}, result={}",
                         message_count, id, result
                     );
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::Disconnected => {
+                alphasec_rs::types::WebSocketMessage::Disconnected => {
                     info!("🔌 Disconnected");
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::TradeMsg { params, .. } => {
+                alphasec_rs::types::WebSocketMessage::TradeMsg { params, .. } => {
                     for trade in &params.result {
                         info!("💱 Trade update #{}: channel={}, trade_id={}, market_id={}, price={}, quantity={}, buy_order_id={}, sell_order_id={}, created_at={}, is_buyer_maker={}", 
                           message_count, params.channel, trade.trade_id, trade.market_id, 
                           trade.price, trade.quantity, trade.buy_order_id, trade.sell_order_id, trade.created_at, trade.is_buyer_maker);
                     }
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::DepthMsg { params, .. } => {
+                alphasec_rs::types::WebSocketMessage::DepthMsg { params, .. } => {
                     info!(
                         "📊 Depth update #{}: channel={}, market={}, bids={}, asks={}",
                         message_count,
@@ -112,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .unwrap_or(0)
                     );
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::TickerMsg { params, .. } => {
+                alphasec_rs::types::WebSocketMessage::TickerMsg { params, .. } => {
                     info!(
                         "📈 Ticker update #{}: channel={}, entries={}",
                         message_count,
@@ -126,27 +126,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::UserEventMsg { params, .. } => {
+                alphasec_rs::types::WebSocketMessage::UserEventMsg { params, .. } => {
                     match &params.result {
-                        alphasec_rust_sdk::types::UserEventResult::Order { base, order } => {
+                        alphasec_rs::types::UserEventResult::Order { base, order } => {
                             info!("👤 User event (ORDER) #{}: channel={}, topic={}, type={}, order_id={}, status={}, market={}, side={}, last_price={}, last_qty={}, trade_id={}", 
                                   message_count, params.channel, params.result.topic(), base.event_type, 
                                   order.order_id, order.status, order.market_id, order.side, order.last_price, order.last_qty, order.trade_id);
                         }
-                        alphasec_rust_sdk::types::UserEventResult::Account { base, account } => {
+                        alphasec_rs::types::UserEventResult::Account { base, account } => {
                             info!("👤 User event (ACCOUNT) #{}: channel={}, topic={}, type={}, token_id={}, amount={}, from={:?}, to={:?}", 
                                   message_count, params.channel, params.result.topic(), base.event_type, 
                                   account.token_id, account.amount, account.from_address, account.to_address);
                         }
                     }
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::Generic(value) => {
+                alphasec_rs::types::WebSocketMessage::Generic(value) => {
                     info!("🔧 Generic message #{}: {:?}", message_count, value);
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::Pong(items) => {
+                alphasec_rs::types::WebSocketMessage::Pong(items) => {
                     info!("🔧 Pong message #{}: {:?}", message_count, items);
                 }
-                alphasec_rust_sdk::types::WebSocketMessage::Ping(items) => {
+                alphasec_rs::types::WebSocketMessage::Ping(items) => {
                     info!("🔧 Ping message #{}: {:?}", message_count, items);
                     let _ = ws_sender.send(Message::Pong(items));
                     info!("🔧 Pong message sent #{}", message_count);

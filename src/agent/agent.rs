@@ -57,7 +57,7 @@ impl Agent {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use alphasec_rust_sdk::{Agent, Config};
+    /// use alphasec_rs::{Agent, Config};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -147,7 +147,7 @@ impl Agent {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use alphasec_rust_sdk::{Agent, Config};
+    /// use alphasec_rs::{Agent, Config};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {

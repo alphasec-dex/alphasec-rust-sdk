@@ -1,4 +1,4 @@
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]

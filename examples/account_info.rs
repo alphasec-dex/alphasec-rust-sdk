@@ -6,7 +6,7 @@
 //! - Open orders
 //! - Order history
 
-use alphasec_rust_sdk::{Agent, Config, OrderSide};
+use alphasec_rs::{Agent, Config, OrderSide};
 use tracing::{error, info, warn};
 
 #[tokio::main]

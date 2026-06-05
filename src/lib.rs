@@ -14,7 +14,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use alphasec_rust_sdk::{Agent, Config, OrderSide, OrderType, OrderMode};
+//! use alphasec_rs::{Agent, Config, OrderSide, OrderType, OrderMode};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

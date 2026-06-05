@@ -11,7 +11,7 @@
 //! 2. Make sure you have sufficient balance
 //! 3. Run: cargo run --example simple_trading
 
-use alphasec_rust_sdk::{Agent, Config, OrderMode, OrderSide, OrderType};
+use alphasec_rs::{Agent, Config, OrderMode, OrderSide, OrderType};
 use tracing::{error, info};
 use std::str::FromStr;
 use rust_decimal::Decimal;
