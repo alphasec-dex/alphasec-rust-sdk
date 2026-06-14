@@ -569,6 +569,79 @@ impl Agent {
         }
     }
 
+    /// Spot → Perp internal transfer (0x12 PerpDeposit).
+    ///
+    /// Moves `value` units of `token` (L2 symbol, e.g. "USDT") from the
+    /// spot trading account into the perp margin account belonging to the
+    /// same L1 wallet. Returns the submitted tx hash on success.
+    pub async fn perp_deposit(
+        &self,
+        token: &str,
+        value: f64,
+        timestamp_ms: Option<u64>,
+    ) -> Result<String> {
+        let token_id = self
+            .api
+            .token_metadata()
+            .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
+            .symbol_token_id_map
+            .get(token)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?
+            .clone();
+        // L2 accounting always uses 18 decimals.
+        let amount_units = crate::signer::AlphaSecSigner::to_onchain_units(value, 18)?;
+        let data = self
+            .signer
+            .create_perp_deposit_data(&token_id, &amount_units.to_string())?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(timestamp_ms, &data, None)
+            .await?;
+        let response = self.api.token_transfer(&signed_tx).await?;
+        if response.success {
+            Ok(response.result_string())
+        } else {
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
+        }
+    }
+
+    /// Perp → Spot internal transfer (0x44 PerpWithdraw).
+    pub async fn perp_withdraw(
+        &self,
+        token: &str,
+        value: f64,
+        timestamp_ms: Option<u64>,
+    ) -> Result<String> {
+        let token_id = self
+            .api
+            .token_metadata()
+            .ok_or_else(|| AlphaSecError::config("Token metadata not initialized"))?
+            .symbol_token_id_map
+            .get(token)
+            .ok_or_else(|| AlphaSecError::config(format!("Unknown token symbol: {}", token)))?
+            .clone();
+        let amount_units = crate::signer::AlphaSecSigner::to_onchain_units(value, 18)?;
+        let data = self
+            .signer
+            .create_perp_withdraw_data(&token_id, &amount_units.to_string())?;
+        let signed_tx = self
+            .signer
+            .generate_alphasec_transaction(timestamp_ms, &data, None)
+            .await?;
+        let response = self.api.token_transfer(&signed_tx).await?;
+        if response.success {
+            Ok(response.result_string())
+        } else {
+            Err(AlphaSecError::api(
+                response.code.unwrap(),
+                response.error.unwrap(),
+            ))
+        }
+    }
+
     /// Place a stop order
     pub async fn stop_order(
         &self,

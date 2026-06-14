@@ -93,7 +93,7 @@ impl AlphaSecSigner {
     /// - Rejects NaN/inf and negative values.
     /// - Floors/truncates towards zero (matching previous `as u64` behavior for non-negative values).
     /// - Returns an error instead of silently saturating on overflow.
-    fn to_onchain_units(value: f64, decimals: u32) -> Result<U256> {
+    pub fn to_onchain_units(value: f64, decimals: u32) -> Result<U256> {
         if !value.is_finite() {
             return Err(AlphaSecError::invalid_parameter(
                 "value must be a finite number",
