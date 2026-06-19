@@ -117,6 +117,8 @@ pub mod dex_commands {
     pub const DEX_COMMAND_PERP_TRIGGER_ORDER: u8 = 0x48;
     /// Perp trigger batch command
     pub const DEX_COMMAND_PERP_TRIGGER_BATCH: u8 = 0x49;
+    /// Perp modify order command (cancel-and-replace)
+    pub const DEX_COMMAND_PERP_MODIFY: u8 = 0x4A;
     /// Perp position TP/SL command
     pub const DEX_COMMAND_PERP_POSITION_TPSL: u8 = 0x4B;
 }
@@ -131,6 +133,12 @@ pub mod endpoints {
 
     /// AlphaSec API mainnet URL
     pub const ALPHASEC_API_MAINNET_URL: &str = "https://api.alphasec.trade";
+
+    /// AlphaSec perp API testnet URL
+    pub const ALPHASEC_PERP_API_TESTNET_URL: &str = "https://api-testnet.alphasec.trade";
+
+    /// AlphaSec perp API mainnet URL
+    pub const ALPHASEC_PERP_API_MAINNET_URL: &str = "https://api.alphasec.trade";
 
     /// AlphaSec mainnet L2 RPC URL
     pub const ALPHASEC_MAINNET_URL: &str = "https://rpc.alphasec.trade";

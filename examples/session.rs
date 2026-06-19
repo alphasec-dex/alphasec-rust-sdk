@@ -1,4 +1,4 @@
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -10,8 +10,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your L1 address
-        Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
+        "0x0000000000000000000000000000000000000000", // Your L1 address
+        Some("0x0000000000000000000000000000000000000000000000000000000000000000"), // Your private key (no 0x prefix)
         Some("0xb7c58f04896daeaf67676d52ad8d5e33b295779eb4962b26b335e172285cec66"), // L2 key, no session
         false, // L1 key, no session
         None,  // Chain ID

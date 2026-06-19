@@ -78,7 +78,7 @@ impl TradeWebSocket {
     /// Create a new TradeWebSocket
     ///
     /// # Arguments
-    /// * `ws_api_url` - WebSocket API URL (e.g., `wss://api-qa.dexor.trade/ws-api`)
+    /// * `ws_api_url` - WebSocket API URL (e.g., `wss://api.alphasec.trade/ws-api`)
     pub fn new(ws_api_url: &str) -> Self {
         Self {
             ws_api_url: ws_api_url.to_string(),
@@ -97,7 +97,10 @@ impl TradeWebSocket {
     /// pending requests are failed. The caller is responsible for
     /// reconnection (see Binance/Bybit connector pattern).
     pub async fn connect(&self) -> Result<()> {
-        info!("📡 Connecting to AlphaSec Trade WebSocket: {}", self.ws_api_url);
+        info!(
+            "📡 Connecting to AlphaSec Trade WebSocket: {}",
+            self.ws_api_url
+        );
 
         let (ws_stream, _) = connect_async(&self.ws_api_url)
             .await

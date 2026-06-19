@@ -1,11 +1,11 @@
 //! API client for AlphaSec REST API
 
+pub use crate::types::account::{Transfer, TransferHistoryQuery};
 use crate::{
     error::{AlphaSecError, Result},
     signer::{AlphaSecSigner, Config},
     types::{account::*, api::*, market::*, orders::*},
 };
-pub use crate::types::account::{Transfer, TransferHistoryQuery};
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use std::time::Duration;
@@ -725,5 +725,99 @@ impl ApiClient {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Client whose base URL points at an unreachable endpoint (port 1 on localhost).
+    /// If a signer guard were missing, the method would attempt HTTP and surface a
+    /// transport Err(Http) instead of Err(Auth) — which makes the "guard returns
+    /// BEFORE any HTTP attempt" claim falsifiable rather than assumed.
+    fn client_without_signer() -> ApiClient {
+        let config = Config::new(
+            "http://127.0.0.1:1",
+            "kairos",
+            "0x1234567890123456789012345678901234567890",
+            None,
+            None,
+            false,
+            None,
+        )
+        .expect("test config must build");
+        ApiClient::new(&config, None).expect("client without signer must build")
+    }
+
+    fn assert_auth_guard(result: Result<ApiResponse<Value>>, method: &str, expected_msg: &str) {
+        match result {
+            Err(AlphaSecError::Auth(msg)) => {
+                assert_eq!(msg, expected_msg, "{}: wrong Auth message", method)
+            }
+            Err(other) => panic!(
+                "{}: expected Err(Auth) before any HTTP attempt, got {:?} (guard missing -> transport error)",
+                method, other
+            ),
+            Ok(_) => panic!("{}: expected Err(Auth), got Ok", method),
+        }
+    }
+
+    #[tokio::test]
+    async fn trading_methods_return_auth_error_without_signer_before_http() {
+        let client = client_without_signer();
+        let expected = "Signer required for trading operations";
+        assert_auth_guard(client.order("0xdead").await, "order", expected);
+        assert_auth_guard(client.cancel("0xdead").await, "cancel", expected);
+        assert_auth_guard(client.cancel_all("0xdead").await, "cancel_all", expected);
+        assert_auth_guard(client.modify("0xdead").await, "modify", expected);
+        assert_auth_guard(client.stop_order("0xdead").await, "stop_order", expected);
+    }
+
+    #[tokio::test]
+    async fn transfer_methods_return_auth_error_without_signer_before_http() {
+        let client = client_without_signer();
+        let expected = "Signer required for transfer operations";
+        assert_auth_guard(
+            client.native_transfer("0xdead").await,
+            "native_transfer",
+            expected,
+        );
+        assert_auth_guard(
+            client.token_transfer("0xdead").await,
+            "token_transfer",
+            expected,
+        );
+    }
+
+    #[tokio::test]
+    async fn session_methods_return_auth_error_without_signer_before_http() {
+        let client = client_without_signer();
+        let expected = "Signer required for session operations";
+        assert_auth_guard(
+            client.create_session("sid", "0xdead").await,
+            "create_session",
+            expected,
+        );
+        assert_auth_guard(
+            client.update_session("sid", "0xdead").await,
+            "update_session",
+            expected,
+        );
+        assert_auth_guard(
+            client.delete_session("0xdead").await,
+            "delete_session",
+            expected,
+        );
+    }
+
+    #[tokio::test]
+    async fn withdraw_token_returns_auth_error_without_signer_before_http() {
+        let client = client_without_signer();
+        assert_auth_guard(
+            client.withdraw_token("0xdead").await,
+            "withdraw_token",
+            "Signer required for withdraw operations",
+        );
     }
 }

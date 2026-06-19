@@ -6,7 +6,7 @@
 //! - Open orders
 //! - Order history
 
-use alphasec_rust_sdk::{Agent, Config, OrderSide};
+use alphasec_rs::{Agent, Config, OrderSide};
 use tracing::{error, info, warn};
 
 #[tokio::main]
@@ -20,8 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your address
-        Some("ca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
+        "0x0000000000000000000000000000000000000000", // Your address
+        Some("0000000000000000000000000000000000000000000000000000000000000000"), // Your private key (no 0x prefix)
         None,  // L2 key, no session
         false, // L1 key, no session
         None,  // Chain ID

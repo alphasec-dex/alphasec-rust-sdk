@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to transfer USDT tokens only
 
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 use tracing::{error, info, warn};
 
 #[tokio::main]

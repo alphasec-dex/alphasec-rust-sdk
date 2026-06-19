@@ -243,3 +243,129 @@ impl TokenMetadata {
         Ok(format!("{}/{}", base_symbol, quote_symbol))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AlphaSecError;
+
+    /// Test-only Token builder. `symbol` (the L1 symbol) is deliberately distinct from
+    /// `l2_symbol` so a from_tokens regression that keys the map on the L1 symbol makes
+    /// every l2-symbol lookup fail instead of passing by coincidence.
+    fn make_token(token_id: &str, l2_symbol: &str) -> Token {
+        Token {
+            token_id: token_id.to_string(),
+            symbol: format!("L1{}", l2_symbol),
+            l2_symbol: l2_symbol.to_string(),
+            l1_address: format!("0x{:0>40}", token_id),
+            decimals: 18,
+            is_active: true,
+        }
+    }
+
+    fn metadata() -> TokenMetadata {
+        TokenMetadata::from_tokens(&[make_token("1", "KAIA"), make_token("2", "USDT")])
+    }
+
+    #[test]
+    fn market_to_market_id_joins_base_then_quote_token_ids() {
+        let md = metadata();
+        assert_eq!(md.market_to_market_id("KAIA/USDT").unwrap(), "1_2");
+        // Reversed market must produce the reversed id; if base/quote were swapped
+        // internally, both assertions cannot hold at once.
+        assert_eq!(md.market_to_market_id("USDT/KAIA").unwrap(), "2_1");
+    }
+
+    #[test]
+    fn market_format_without_exactly_one_slash_is_invalid_parameter() {
+        let md = metadata();
+        for input in ["KAIAUSDT", "A/B/C", ""] {
+            let err = md.market_to_market_id(input).unwrap_err();
+            assert!(
+                matches!(err, AlphaSecError::InvalidParameter(_)),
+                "{:?} expected InvalidParameter, got {:?}",
+                input,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn empty_quote_is_quote_not_found_distinct_from_base_missing() {
+        let md = metadata();
+
+        // "KAIA/" -> base resolves, empty quote symbol fails the quote lookup.
+        let err = md.market_to_market_id("KAIA/").unwrap_err();
+        assert!(matches!(err, AlphaSecError::NotFound(_)), "got {:?}", err);
+        let msg = err.to_string();
+        assert!(msg.contains("Quote token not found"), "msg: {}", msg);
+        assert!(!msg.contains("Base token"), "msg: {}", msg);
+
+        // Unknown base is attributed to the base side. (Lookup ORDER itself is pinned in
+        // empty_token_slice_makes_wellformed_lookups_not_found, where both lookups fail.)
+        let err = md.market_to_market_id("XXX/USDT").unwrap_err();
+        assert!(matches!(err, AlphaSecError::NotFound(_)), "got {:?}", err);
+        let msg = err.to_string();
+        assert!(msg.contains("Base token not found: XXX"), "msg: {}", msg);
+        assert!(!msg.contains("Quote token"), "msg: {}", msg);
+
+        // Empty base ("/USDT") is also attributed to the base side.
+        let err = md.market_to_market_id("/USDT").unwrap_err();
+        assert!(matches!(err, AlphaSecError::NotFound(_)), "got {:?}", err);
+        let msg = err.to_string();
+        assert!(msg.contains("Base token not found"), "msg: {}", msg);
+        assert!(!msg.contains("Quote token"), "msg: {}", msg);
+    }
+
+    #[test]
+    fn market_id_to_market_inverts_market_to_market_id() {
+        let md = metadata();
+        for market in ["KAIA/USDT", "USDT/KAIA"] {
+            let id = md.market_to_market_id(market).unwrap();
+            assert_eq!(md.market_id_to_market(&id).unwrap(), market);
+        }
+    }
+
+    #[test]
+    fn market_id_with_wrong_separator_or_extra_parts_is_invalid_parameter() {
+        let md = metadata();
+        for input in ["1-2", "1_2_3"] {
+            let err = md.market_id_to_market(input).unwrap_err();
+            assert!(
+                matches!(err, AlphaSecError::InvalidParameter(_)),
+                "{:?} expected InvalidParameter, got {:?}",
+                input,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_l2_symbol_resolves_to_last_token_id() {
+        let md = TokenMetadata::from_tokens(&[
+            make_token("7", "DUP"),
+            make_token("8", "DUP"),
+            make_token("2", "USDT"),
+        ]);
+        // symbol -> id direction loses token "7": the later insert wins.
+        assert_eq!(md.symbol_token_id_map.get("DUP"), Some(&"8".to_string()));
+        assert_eq!(md.market_to_market_id("DUP/USDT").unwrap(), "8_2");
+        // id -> symbol direction keeps both ids (keys are distinct), so the loss is
+        // one-directional: "7_2" still maps back to "DUP/USDT".
+        assert_eq!(md.market_id_to_market("7_2").unwrap(), "DUP/USDT");
+    }
+
+    #[test]
+    fn empty_token_slice_makes_wellformed_lookups_not_found() {
+        let md = TokenMetadata::from_tokens(&[]);
+        let err = md.market_to_market_id("KAIA/USDT").unwrap_err();
+        assert!(matches!(err, AlphaSecError::NotFound(_)), "got {:?}", err);
+        // Both lookups fail on empty metadata, so the winning message is the only input
+        // that truly pins lookup ORDER: a quote-first implementation would report the
+        // quote side here.
+        let msg = err.to_string();
+        assert!(msg.contains("Base token not found: KAIA"), "msg: {}", msg);
+        let err = md.market_id_to_market("1_2").unwrap_err();
+        assert!(matches!(err, AlphaSecError::NotFound(_)), "got {:?}", err);
+    }
+}

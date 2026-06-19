@@ -2,7 +2,7 @@
 
 A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX, built on the Kaia blockchain.
 
-[![Crates.io](https://img.shields.io/crates/v/alphasec-rust-sdk.svg)](https://crates.io/crates/alphasec-rust-sdk)
+[![Crates.io](https://img.shields.io/crates/v/alphasec-rs.svg)](https://crates.io/crates/alphasec-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## 🔗 Links
@@ -33,7 +33,7 @@ A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX, built 
 ### Environment-specific Configurations
 
 ```rust
-use alphasec_rust_sdk::{Agent, Config};
+use alphasec_rs::{Agent, Config};
 
 // Note: private keys are optional; pass Some(key) when signing is needed.
 let config = Config::new(
@@ -83,7 +83,7 @@ let order = agent.get_order_by_id("order_id").await?;
 ### Trading Operations
 
 ```rust
-use alphasec_rust_sdk::{OrderSide, OrderType, OrderMode};
+use alphasec_rs::{OrderSide, OrderType, OrderMode};
 
 // Place a limit buy order
 // order_id : tx_hash
@@ -142,7 +142,7 @@ let success = agent.token_transfer("0x...", 1, "USDT").await?; // 1 USDT
 
 ```rust
 // Enable websocket feature in Cargo.toml
-// alphasec-rust-sdk = { version = "0.1.0", features = ["websocket"] }
+// alphasec-rs = { version = "0.1.0", features = ["websocket"] }
 
 // Start WebSocket connection
 agent.start().await?;
@@ -157,10 +157,10 @@ let sub_trade  = agent.subscribe("trade@KAIA/USDT").await?;
 // Consume messages (simplified)
 while let Some(msg) = rx.recv().await {
     match msg {
-        alphasec_rust_sdk::types::WebSocketMessage::TickerMsg { params, .. } => {
+        alphasec_rs::types::WebSocketMessage::TickerMsg { params, .. } => {
             println!("📈 {} entries", params.result.len());
         }
-        alphasec_rust_sdk::types::WebSocketMessage::TradeMsg { params, .. } => {
+        alphasec_rs::types::WebSocketMessage::TradeMsg { params, .. } => {
             for t in &params.result {
                 println!("💱 trade market={} price={} qty={}", t.market_id, t.price, t.quantity);
             }

@@ -14,7 +14,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use alphasec_rust_sdk::{Agent, Config, OrderSide, OrderType, OrderMode};
+//! use alphasec_rs::{Agent, Config, OrderSide, OrderType, OrderMode};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,8 +23,9 @@
 //!         "kairos",                                     // network
 //!         "0x1234567890123456789012345678901234567890", // L1 address
 //!         Some("your_l1_private_key"),                        // L1 private key
-//!         None,
-//!         false                                          // session enabled
+//!         None,                                         // L2 private key
+//!         false,                                        // session enabled
+//!         None                                          // chain ID override
 //!     )?;
 //!     
 //!     let mut agent = Agent::new(config).await?;
@@ -37,13 +38,14 @@
 //!     let success = agent.order(
 //!         "KAIA/USDT",           // market
 //!         OrderSide::Buy,        // side
-//!         1000000.0,             // price
-//!         5000000.0,             // quantity
+//!         "1000000.0".parse()?,  // price
+//!         "5000000.0".parse()?,  // quantity
 //!         OrderType::Limit,      // order_type
 //!         OrderMode::Base,       // order_mode
 //!         None,           // tp_limit
 //!         None,           // sl_trigger
-//!         None            // sl_limit
+//!         None,           // sl_limit
+//!         None            // timestamp_ms
 //!     ).await?;
 //!     
 //!     println!("Order placed: {}", success);
@@ -58,6 +60,7 @@
 pub mod agent;
 pub mod api;
 pub mod error;
+pub mod perp;
 pub mod signer;
 pub mod types;
 
