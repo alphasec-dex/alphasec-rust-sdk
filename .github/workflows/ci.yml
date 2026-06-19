@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Build (all targets)
+        run: cargo build --all-targets
+
+      - name: Test
+        run: cargo test --all-targets
+
+      - name: Doc tests
+        run: cargo test --doc
+
+      # NOTE: `-D warnings` is the target gate (decision 5) but is disabled until
+      # the pre-existing warnings/tests are triaged. Re-enable once the repo is clean.
+      - name: Clippy
+        run: cargo clippy --all-targets
