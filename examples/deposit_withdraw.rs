@@ -11,8 +11,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         endpoints::ALPHASEC_API_TESTNET_URL,
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your L1 address
-        Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
+        "0x0000000000000000000000000000000000000000", // Your L1 address
+        Some("0x0000000000000000000000000000000000000000000000000000000000000000"), // Your private key (no 0x prefix)
         Some("0x3a27159a9c2fc4f837a086f24bcf80f5f270e9d1224c6953859656f94c2fe2f3"), // L2 key, no session
         false, // L1 key, no session
         None,  // Chain ID

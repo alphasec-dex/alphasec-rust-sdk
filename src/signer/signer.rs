@@ -1,14 +1,17 @@
 //! AlphaSec transaction signer with EIP-712 support
 
 use crate::{
-    OrderType, error::{AlphaSecError, Result}, signer::{config::Config, normalize_price_quantity, transaction::*}, types::{
+    error::{AlphaSecError, Result},
+    signer::{config::Config, normalize_price_quantity, transaction::*},
+    types::{
         chain_ids::{ALPHASEC_MAINNET_CHAIN_ID, ALPHASEC_TESTNET_CHAIN_ID},
-        constants::{ALPHASEC_NATIVE_TOKEN_ID, abi::*, l1_contracts::*},
+        constants::{abi::*, l1_contracts::*, ALPHASEC_NATIVE_TOKEN_ID},
         dex_commands::*,
         eip712::*,
         gas::*,
         l2_contracts::ALPHASEC_ORDER_CONTRACT_ADDR,
-    }
+    },
+    OrderType,
 };
 use base64::{self, Engine};
 use ethers::{
@@ -23,8 +26,8 @@ use ethers::{
     types::transaction::eip712::{Eip712, TypedData as Eip712TypedData},
 };
 use rust_decimal::Decimal;
-use std::str::FromStr;
 use serde_json;
+use std::str::FromStr;
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -100,7 +103,9 @@ impl AlphaSecSigner {
             ));
         }
         if value < 0.0 {
-            return Err(AlphaSecError::invalid_parameter("value must be non-negative"));
+            return Err(AlphaSecError::invalid_parameter(
+                "value must be non-negative",
+            ));
         }
 
         // Use float math (input is f64 anyway), but validate bounds before converting.
@@ -392,13 +397,13 @@ impl AlphaSecSigner {
 
     /// Create perp order data (0x41)
     ///
-    /// price/quantity are pre-formatted 18-decimal big.Int strings.
+    /// price and quantity are Decimal values; internally scaled ×10^18 via perp_scale.
     pub fn create_perp_order_data(
         &self,
         market_id: u64,
         side: u8,
-        price: &str,
-        quantity: &str,
+        price: Decimal,
+        quantity: Decimal,
         is_reduce_only: bool,
         time_in_force: u8,
         client_order_id: Option<&str>,
@@ -408,92 +413,111 @@ impl AlphaSecSigner {
             l1owner: self.l1_address().to_string(),
             market_id,
             side,
-            price: price.to_string(),
-            quantity: quantity.to_string(),
+            price: crate::signer::perp_scale(price)?,
+            quantity: crate::signer::perp_scale(quantity)?,
             is_reduce_only,
             time_in_force,
             client_order_id: client_order_id.map(|s| s.to_string()),
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Create perp cancel data (0x42)
-    pub fn create_perp_cancel_data(
-        &self,
-        market_id: u64,
-        order_id: &str,
-    ) -> Result<Vec<u8>> {
+    pub fn create_perp_cancel_data(&self, market_id: u64, order_id: &str) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpCancelModel;
         let model = PerpCancelModel {
             l1owner: self.l1_address().to_string(),
             market_id,
             order_id: order_id.to_string(),
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Create perp cancel all data (0x43)
-    pub fn create_perp_cancel_all_data(
-        &self,
-        market_id: u64,
-    ) -> Result<Vec<u8>> {
+    pub fn create_perp_cancel_all_data(&self, market_id: u64) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpCancelAllModel;
         let model = PerpCancelAllModel {
             l1owner: self.l1_address().to_string(),
             market_id,
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Create perp set leverage data (0x45)
-    pub fn create_perp_set_leverage_data(
-        &self,
-        market_id: u64,
-        leverage: u32,
-    ) -> Result<Vec<u8>> {
+    pub fn create_perp_set_leverage_data(&self, market_id: u64, leverage: u32) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpSetLeverageModel;
         let model = PerpSetLeverageModel {
             l1owner: self.l1_address().to_string(),
             market_id,
             leverage,
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
+    }
+
+    /// Create perp modify order data (0x4A) — cancel-and-replace
+    ///
+    /// new_price/new_quantity are Option<Decimal>: None means omit the key (server inherits).
+    /// Some(value) is scaled ×10^18 via perp_scale and emitted as a raw JSON number.
+    pub fn create_perp_modify_data(
+        &self,
+        market_id: u64,
+        order_id: &str,
+        new_price: Option<Decimal>,
+        new_quantity: Option<Decimal>,
+        client_order_id: Option<&str>,
+    ) -> Result<Vec<u8>> {
+        use crate::signer::perp_transaction::PerpModifyModel;
+        let model = PerpModifyModel {
+            l1owner: self.l1_address().to_string(),
+            market_id,
+            order_id: order_id.to_string(),
+            new_price: new_price.map(crate::signer::perp_scale).transpose()?,
+            new_quantity: new_quantity.map(crate::signer::perp_scale).transpose()?,
+            client_order_id: client_order_id.map(|s| s.to_string()),
+        };
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Create perp deposit data (0x12) — Spot→Perp
     ///
     /// token: token identifier (e.g., "2" for USDT)
-    /// amount: 18-decimal big.Int string
-    pub fn create_perp_deposit_data(
-        &self,
-        token: &str,
-        amount: &str,
-    ) -> Result<Vec<u8>> {
+    /// amount: Decimal value; internally scaled ×10^18 via perp_scale.
+    pub fn create_perp_deposit_data(&self, token: &str, amount: Decimal) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpDepositModel;
         let model = PerpDepositModel {
             l1owner: self.l1_address().to_string(),
             token: token.to_string(),
-            amount: amount.to_string(),
+            amount: crate::signer::perp_scale(amount)?,
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Create perp withdraw data (0x44) — Perp→Spot
     ///
     /// token: token identifier (e.g., "2" for USDT)
-    /// amount: 18-decimal big.Int string
-    pub fn create_perp_withdraw_data(
-        &self,
-        token: &str,
-        amount: &str,
-    ) -> Result<Vec<u8>> {
+    /// amount: Decimal value; internally scaled ×10^18 via perp_scale.
+    pub fn create_perp_withdraw_data(&self, token: &str, amount: Decimal) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpWithdrawModel;
         let model = PerpWithdrawModel {
             l1owner: self.l1_address().to_string(),
             token: token.to_string(),
-            amount: amount.to_string(),
+            amount: crate::signer::perp_scale(amount)?,
         };
-        model.to_wire().map_err(|e| AlphaSecError::signer(e.to_string()))
+        model
+            .to_wire()
+            .map_err(|e| AlphaSecError::signer(e.to_string()))
     }
 
     /// Generate AlphaSec transaction
@@ -999,14 +1023,39 @@ mod tests {
         .unwrap()
     }
 
+    fn create_test_config_mainnet() -> Config {
+        // Same well-known Hardhat/Anvil test key, mainnet network selector.
+        Config::new(
+            "https://api.alphasec.trade",
+            "mainnet",
+            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"),
+            None,  // L2 key, no session
+            false, // L1 key, no session
+            None,  // Chain ID
+        )
+        .unwrap()
+    }
+
+    /// Decode a `0x`-prefixed signed raw transaction back into a TypedTransaction.
+    fn decode_signed_tx(tx_hex: &str) -> TypedTransaction {
+        let raw = hex::decode(tx_hex.trim_start_matches("0x")).expect("signed tx must be hex");
+        let rlp = ethers::core::utils::rlp::Rlp::new(&raw);
+        let (tx, _signature) =
+            TypedTransaction::decode_signed(&rlp).expect("signed tx must RLP-decode");
+        tx
+    }
+
     #[test]
     fn test_signer_creation() {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
+        // Key-derived, lowercase — the mixed-case address passed to Config::new is ignored
+        // (this exact-equality also rules out preserving the caller's checksum casing).
         assert_eq!(
             signer.l1_address(),
-            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
         );
     }
 
@@ -1025,8 +1074,8 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         let session_addr = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
-        let nonce = 123456789;
-        let expiry = 987654321;
+        let nonce: u64 = 123456789;
+        let expiry: u64 = 987654321;
 
         let typed_data = signer.create_session_register_typed_data(session_addr, nonce, expiry);
 
@@ -1039,10 +1088,20 @@ mod tests {
             VERIFYING_CONTRACT
         );
 
-        // Check message
+        // Check message: nonce/expiry are JSON Numbers, not strings.
         assert_eq!(typed_data["message"]["sessionWallet"], session_addr);
-        assert_eq!(typed_data["message"]["nonce"], nonce.to_string());
-        assert_eq!(typed_data["message"]["expiry"], expiry.to_string());
+        assert_eq!(typed_data["message"]["nonce"], nonce);
+        assert_eq!(typed_data["message"]["expiry"], expiry);
+        assert!(
+            typed_data["message"]["nonce"].is_u64(),
+            "nonce must be a JSON Number, got: {:?}",
+            typed_data["message"]["nonce"]
+        );
+        assert!(
+            typed_data["message"]["expiry"].is_u64(),
+            "expiry must be a JSON Number, got: {:?}",
+            typed_data["message"]["expiry"]
+        );
 
         // Check primary type
         assert_eq!(typed_data["primaryType"], "RegisterSessionWallet");
@@ -1256,19 +1315,26 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         let result = signer.create_perp_order_data(
-            1,    // market_id
-            0,    // side: Buy
-            "42000500000000000000000", // price: 42000.5 in 18dec
-            "10000000000000000",       // quantity: 0.01 in 18dec
+            1,                                     // market_id
+            0,                                     // side: Buy
+            Decimal::from_str("42000.5").unwrap(), // price: 42000.5 → 42000500000000000000000 in 18dec
+            Decimal::from_str("0.01").unwrap(),    // quantity: 0.01 → 10000000000000000 in 18dec
             false,
-            2,    // POST
+            2, // POST
             Some("coid-abc"),
         );
 
-        assert!(result.is_ok(), "create_perp_order_data returned Err: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "create_perp_order_data returned Err: {:?}",
+            result.err()
+        );
         let data = result.unwrap();
         assert!(!data.is_empty());
-        assert_eq!(data[0], 0x41, "first byte must be DEX_COMMAND_PERP_ORDER (0x41)");
+        assert_eq!(
+            data[0], 0x41,
+            "first byte must be DEX_COMMAND_PERP_ORDER (0x41)"
+        );
     }
 
     #[test]
@@ -1278,11 +1344,11 @@ mod tests {
 
         let result = signer.create_perp_order_data(
             7,
-            1,    // side: Sell
-            "2000000000000000000000",  // price: 2000 in 18dec
-            "500000000000000000",      // quantity: 0.5 in 18dec
+            1,                                  // side: Sell
+            Decimal::from_str("2000").unwrap(), // price: 2000 → 2000000000000000000000 in 18dec
+            Decimal::from_str("0.5").unwrap(),  // quantity: 0.5 → 500000000000000000 in 18dec
             true,
-            1,    // IOC
+            1, // IOC
             Some("order-xyz"),
         );
 
@@ -1293,7 +1359,10 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&data[1..])
             .expect("payload after command byte must be valid JSON");
 
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
         assert_eq!(json["marketId"], 7u64);
         assert_eq!(json["side"], 1u8);
         assert_eq!(json["isReduceOnly"], true);
@@ -1301,8 +1370,16 @@ mod tests {
         assert_eq!(json["clientOrderId"], "order-xyz");
         // price/quantity are raw numbers for Go big.Int compat — check raw bytes
         let raw_json = std::str::from_utf8(&data[1..]).unwrap();
-        assert!(raw_json.contains("\"price\":2000000000000000000000"), "price must be raw number, got: {}", raw_json);
-        assert!(raw_json.contains("\"quantity\":500000000000000000"), "qty must be raw number, got: {}", raw_json);
+        assert!(
+            raw_json.contains("\"price\":2000000000000000000000"),
+            "price must be raw number, got: {}",
+            raw_json
+        );
+        assert!(
+            raw_json.contains("\"quantity\":500000000000000000"),
+            "qty must be raw number, got: {}",
+            raw_json
+        );
     }
 
     #[test]
@@ -1311,7 +1388,13 @@ mod tests {
         let signer = AlphaSecSigner::new(config);
 
         let result = signer.create_perp_order_data(
-            1, 0, "1000000000000000000000", "100000000000000000", false, 0, None,
+            1,
+            0,
+            Decimal::from_str("1000").unwrap(), // price: 1000 → 1000000000000000000000
+            Decimal::from_str("0.1").unwrap(),  // quantity: 0.1 → 100000000000000000
+            false,
+            0,
+            None,
         );
 
         assert!(result.is_ok());
@@ -1335,9 +1418,16 @@ mod tests {
             "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         );
 
-        assert!(result.is_ok(), "create_perp_cancel_data returned Err: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "create_perp_cancel_data returned Err: {:?}",
+            result.err()
+        );
         let data = result.unwrap();
-        assert_eq!(data[0], 0x42, "first byte must be DEX_COMMAND_PERP_CANCEL (0x42)");
+        assert_eq!(
+            data[0], 0x42,
+            "first byte must be DEX_COMMAND_PERP_CANCEL (0x42)"
+        );
     }
 
     #[test]
@@ -1352,7 +1442,10 @@ mod tests {
         let data = result.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
 
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
         assert_eq!(json["marketId"], 3u64);
         assert_eq!(json["orderId"], order_id);
     }
@@ -1364,9 +1457,16 @@ mod tests {
 
         let result = signer.create_perp_cancel_all_data(1);
 
-        assert!(result.is_ok(), "create_perp_cancel_all_data returned Err: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "create_perp_cancel_all_data returned Err: {:?}",
+            result.err()
+        );
         let data = result.unwrap();
-        assert_eq!(data[0], 0x43, "first byte must be DEX_COMMAND_PERP_CANCEL_ALL (0x43)");
+        assert_eq!(
+            data[0], 0x43,
+            "first byte must be DEX_COMMAND_PERP_CANCEL_ALL (0x43)"
+        );
     }
 
     #[test]
@@ -1382,7 +1482,10 @@ mod tests {
 
         let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
         assert_eq!(json["marketId"], 0u64);
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
     }
 
     #[test]
@@ -1392,9 +1495,16 @@ mod tests {
 
         let result = signer.create_perp_set_leverage_data(1, 10);
 
-        assert!(result.is_ok(), "create_perp_set_leverage_data returned Err: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "create_perp_set_leverage_data returned Err: {:?}",
+            result.err()
+        );
         let data = result.unwrap();
-        assert_eq!(data[0], 0x45, "first byte must be DEX_COMMAND_PERP_SET_LEVERAGE (0x45)");
+        assert_eq!(
+            data[0], 0x45,
+            "first byte must be DEX_COMMAND_PERP_SET_LEVERAGE (0x45)"
+        );
     }
 
     #[test]
@@ -1408,7 +1518,10 @@ mod tests {
         let data = result.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
 
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
         assert_eq!(json["marketId"], 2u64);
         assert_eq!(json["leverage"], 50u32);
     }
@@ -1434,14 +1547,35 @@ mod tests {
         let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
 
         // Verify camelCase rename attributes are applied
-        assert!(json.get("marketId").is_some(),      "marketId must be camelCase");
-        assert!(json.get("market_id").is_none(),     "snake_case market_id must not appear");
-        assert!(json.get("isReduceOnly").is_some(),  "isReduceOnly must be camelCase");
-        assert!(json.get("is_reduce_only").is_none(),"snake_case is_reduce_only must not appear");
-        assert!(json.get("timeInForce").is_some(),   "timeInForce must be camelCase");
-        assert!(json.get("time_in_force").is_none(), "snake_case time_in_force must not appear");
-        assert!(json.get("clientOrderId").is_some(), "clientOrderId must be camelCase");
-        assert!(json.get("client_order_id").is_none(),"snake_case client_order_id must not appear");
+        assert!(json.get("marketId").is_some(), "marketId must be camelCase");
+        assert!(
+            json.get("market_id").is_none(),
+            "snake_case market_id must not appear"
+        );
+        assert!(
+            json.get("isReduceOnly").is_some(),
+            "isReduceOnly must be camelCase"
+        );
+        assert!(
+            json.get("is_reduce_only").is_none(),
+            "snake_case is_reduce_only must not appear"
+        );
+        assert!(
+            json.get("timeInForce").is_some(),
+            "timeInForce must be camelCase"
+        );
+        assert!(
+            json.get("time_in_force").is_none(),
+            "snake_case time_in_force must not appear"
+        );
+        assert!(
+            json.get("clientOrderId").is_some(),
+            "clientOrderId must be camelCase"
+        );
+        assert!(
+            json.get("client_order_id").is_none(),
+            "snake_case client_order_id must not appear"
+        );
 
         // Values round-trip correctly
         assert_eq!(json["marketId"], 1u64);
@@ -1465,9 +1599,15 @@ mod tests {
 
         let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
         assert!(json.get("marketId").is_some(), "marketId must be camelCase");
-        assert!(json.get("market_id").is_none(), "snake_case market_id must not appear");
+        assert!(
+            json.get("market_id").is_none(),
+            "snake_case market_id must not appear"
+        );
         assert!(json.get("orderId").is_some(), "orderId must be camelCase");
-        assert!(json.get("order_id").is_none(), "snake_case order_id must not appear");
+        assert!(
+            json.get("order_id").is_none(),
+            "snake_case order_id must not appear"
+        );
     }
 
     #[test]
@@ -1485,7 +1625,10 @@ mod tests {
 
         let json: serde_json::Value = serde_json::from_slice(&wire[1..]).unwrap();
         assert!(json.get("marketId").is_some(), "marketId must be camelCase");
-        assert!(json.get("market_id").is_none(), "snake_case market_id must not appear");
+        assert!(
+            json.get("market_id").is_none(),
+            "snake_case market_id must not appear"
+        );
         assert_eq!(json["leverage"], 25u32);
     }
 
@@ -1496,7 +1639,8 @@ mod tests {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
-        let result = signer.create_perp_deposit_data("2", "1000000000000000000000");
+        // 1000 USDT → 1000000000000000000000 in 18dec
+        let result = signer.create_perp_deposit_data("2", Decimal::from_str("1000").unwrap());
         assert!(result.is_ok());
         let data = result.unwrap();
         assert_eq!(data[0], 0x12, "command byte must be 0x12 for PerpDeposit");
@@ -1507,18 +1651,28 @@ mod tests {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
-        let result = signer.create_perp_deposit_data("2", "5000000000000000000000");
+        // 5000 USDT → 5000000000000000000000 in 18dec
+        let result = signer.create_perp_deposit_data("2", Decimal::from_str("5000").unwrap());
         assert!(result.is_ok());
         let data = result.unwrap();
 
         let json: serde_json::Value = serde_json::from_slice(&data[1..])
             .expect("payload after command byte must be valid JSON");
 
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
         assert_eq!(json["token"], "2");
-        // amount is raw number for Go big.Int compat — check raw bytes
+        // amount is a JSON *string* (server's perpDepositContextJSON.amount is a Go string field;
+        // a raw number is rejected with -1103). Must be quoted, not a bare number.
+        assert_eq!(json["amount"], "5000000000000000000000");
         let raw_json = std::str::from_utf8(&data[1..]).unwrap();
-        assert!(raw_json.contains("\"amount\":5000000000000000000000"), "amount must be raw number, got: {}", raw_json);
+        assert!(
+            raw_json.contains("\"amount\":\"5000000000000000000000\""),
+            "amount must be a quoted string, got: {}",
+            raw_json
+        );
     }
 
     #[test]
@@ -1526,7 +1680,8 @@ mod tests {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
-        let result = signer.create_perp_withdraw_data("2", "1000000000000000000000");
+        // 1000 USDT → 1000000000000000000000 in 18dec
+        let result = signer.create_perp_withdraw_data("2", Decimal::from_str("1000").unwrap());
         assert!(result.is_ok());
         let data = result.unwrap();
         assert_eq!(data[0], 0x44, "command byte must be 0x44 for PerpWithdraw");
@@ -1537,17 +1692,779 @@ mod tests {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
-        let result = signer.create_perp_withdraw_data("2", "3000000000000000000000");
+        // 3000 USDT → 3000000000000000000000 in 18dec
+        let result = signer.create_perp_withdraw_data("2", Decimal::from_str("3000").unwrap());
         assert!(result.is_ok());
         let data = result.unwrap();
 
         let json: serde_json::Value = serde_json::from_slice(&data[1..])
             .expect("payload after command byte must be valid JSON");
 
-        assert_eq!(json["l1owner"], "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266");
+        assert_eq!(
+            json["l1owner"],
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+        );
         assert_eq!(json["token"], "2");
-        // amount is raw number for Go big.Int compat — check raw bytes
+        // amount is a JSON *string* (server's perpWithdrawContextJSON.amount is a Go string field;
+        // a raw number is rejected with -1103). Must be quoted, not a bare number.
+        assert_eq!(json["amount"], "3000000000000000000000");
         let raw_json = std::str::from_utf8(&data[1..]).unwrap();
-        assert!(raw_json.contains("\"amount\":3000000000000000000000"), "amount must be raw number, got: {}", raw_json);
+        assert!(
+            raw_json.contains("\"amount\":\"3000000000000000000000\""),
+            "amount must be a quoted string, got: {}",
+            raw_json
+        );
+    }
+
+    #[test]
+    fn test_perp_modify_omits_none_keys() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Only newPrice specified; newQuantity and clientOrderId are None (inherited)
+        let data = signer
+            .create_perp_modify_data(
+                1,
+                "0xORDER",
+                Some(Decimal::from_str("91000").unwrap()),
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(data[0], 0x4A, "first byte must be 0x4A (PERP_MODIFY)");
+
+        let json = std::str::from_utf8(&data[1..]).unwrap();
+        // newPrice must appear as a raw (unquoted) number
+        assert!(
+            json.contains("\"newPrice\":91000000000000000000000"),
+            "newPrice must be raw number, got: {}",
+            json
+        );
+        // None fields must not appear as keys
+        assert!(
+            !json.contains("newQuantity"),
+            "newQuantity must be absent when None"
+        );
+        assert!(
+            !json.contains("clientOrderId"),
+            "clientOrderId must be absent when None"
+        );
+    }
+
+    #[test]
+    fn test_perp_modify_all_none_is_valid_json_no_trailing_comma() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Every optional field None: only l1owner/marketId/orderId remain.
+        let data = signer
+            .create_perp_modify_data(4, "0xORDER", None, None, None)
+            .unwrap();
+        assert_eq!(data[0], 0x4A, "first byte must be 0x4A (PERP_MODIFY)");
+
+        // A trailing comma or brace imbalance makes this parse fail.
+        let json: serde_json::Value = serde_json::from_slice(&data[1..])
+            .expect("all-None modify payload must still be valid JSON");
+
+        // Required fields present, optional fields fully absent (key-absent = server inherits).
+        assert_eq!(json["marketId"], 4u64);
+        assert_eq!(json["orderId"], "0xORDER");
+        assert!(
+            json.get("newPrice").is_none(),
+            "newPrice must be absent when None"
+        );
+        assert!(
+            json.get("newQuantity").is_none(),
+            "newQuantity must be absent when None"
+        );
+        assert!(
+            json.get("clientOrderId").is_none(),
+            "clientOrderId must be absent when None"
+        );
+
+        // Structurally: must end with a single closing brace, no dangling comma before it.
+        let raw = std::str::from_utf8(&data[1..]).unwrap();
+        assert!(
+            raw.ends_with('}'),
+            "must end with closing brace, got: {}",
+            raw
+        );
+        assert!(
+            !raw.contains(",}"),
+            "must not contain a trailing comma, got: {}",
+            raw
+        );
+    }
+
+    #[test]
+    fn test_perp_modify_empty_client_order_id_is_included_and_distinct_from_none() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Some("") — explicitly empty, must appear as a present key with empty value.
+        let with_empty = signer
+            .create_perp_modify_data(1, "0xORDER", None, None, Some(""))
+            .unwrap();
+        let json_empty: serde_json::Value = serde_json::from_slice(&with_empty[1..]).unwrap();
+        assert!(
+            json_empty.get("clientOrderId").is_some(),
+            "Some(\"\") must keep the clientOrderId key, got: {}",
+            std::str::from_utf8(&with_empty[1..]).unwrap()
+        );
+        assert_eq!(
+            json_empty["clientOrderId"], "",
+            "empty coid must serialize as empty string"
+        );
+
+        // None — key omitted entirely. Proves the two are distinct.
+        let with_none = signer
+            .create_perp_modify_data(1, "0xORDER", None, None, None)
+            .unwrap();
+        let json_none: serde_json::Value = serde_json::from_slice(&with_none[1..]).unwrap();
+        assert!(
+            json_none.get("clientOrderId").is_none(),
+            "None must omit the clientOrderId key"
+        );
+    }
+
+    #[test]
+    fn test_perp_modify_camel_case_field_names_and_raw_quantity() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Both newPrice and newQuantity present, plus a clientOrderId.
+        let data = signer
+            .create_perp_modify_data(
+                9,
+                "0xMODID",
+                Some(Decimal::from_str("2000").unwrap()), // → 2000000000000000000000
+                Some(Decimal::from_str("0.5").unwrap()),  // → 500000000000000000
+                Some("c-1"),
+            )
+            .unwrap();
+        assert_eq!(data[0], 0x4A);
+
+        let raw = std::str::from_utf8(&data[1..]).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        // camelCase present, snake_case absent.
+        assert!(json.get("marketId").is_some(), "marketId must be camelCase");
+        assert!(
+            json.get("market_id").is_none(),
+            "snake_case market_id must not appear"
+        );
+        assert!(json.get("orderId").is_some(), "orderId must be camelCase");
+        assert!(
+            json.get("order_id").is_none(),
+            "snake_case order_id must not appear"
+        );
+        assert!(json.get("newPrice").is_some(), "newPrice must be camelCase");
+        assert!(
+            json.get("new_price").is_none(),
+            "snake_case new_price must not appear"
+        );
+        assert!(
+            json.get("newQuantity").is_some(),
+            "newQuantity must be camelCase"
+        );
+        assert!(
+            json.get("new_quantity").is_none(),
+            "snake_case new_quantity must not appear"
+        );
+        assert!(
+            json.get("clientOrderId").is_some(),
+            "clientOrderId must be camelCase"
+        );
+        assert!(
+            json.get("client_order_id").is_none(),
+            "snake_case client_order_id must not appear"
+        );
+
+        // newQuantity must be a raw (unquoted) number, like newPrice.
+        assert!(
+            raw.contains("\"newQuantity\":500000000000000000"),
+            "newQuantity must be a raw number, got: {}",
+            raw
+        );
+        assert!(
+            raw.contains("\"newPrice\":2000000000000000000000"),
+            "newPrice must be a raw number, got: {}",
+            raw
+        );
+    }
+
+    #[test]
+    fn test_create_perp_order_data_negative_price_or_qty_errors() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Negative price → error.
+        let neg_price = signer.create_perp_order_data(
+            1,
+            0,
+            Decimal::from_str("-1").unwrap(),
+            Decimal::from_str("0.1").unwrap(),
+            false,
+            0,
+            None,
+        );
+        assert!(
+            neg_price.is_err(),
+            "negative price must error, got: {:?}",
+            neg_price
+        );
+
+        // Negative quantity → error (independent of price sign).
+        let neg_qty = signer.create_perp_order_data(
+            1,
+            0,
+            Decimal::from_str("1000").unwrap(),
+            Decimal::from_str("-0.1").unwrap(),
+            false,
+            0,
+            None,
+        );
+        assert!(
+            neg_qty.is_err(),
+            "negative quantity must error, got: {:?}",
+            neg_qty
+        );
+    }
+
+    #[test]
+    fn test_create_perp_modify_data_some_negative_errors() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        // Some(negative) new_price → error.
+        let neg_price = signer.create_perp_modify_data(
+            1,
+            "0xORDER",
+            Some(Decimal::from_str("-100").unwrap()),
+            None,
+            None,
+        );
+        assert!(
+            neg_price.is_err(),
+            "Some(negative) new_price must error, got: {:?}",
+            neg_price
+        );
+
+        // Some(negative) new_quantity → error (independent leg).
+        let neg_qty = signer.create_perp_modify_data(
+            1,
+            "0xORDER",
+            None,
+            Some(Decimal::from_str("-0.5").unwrap()),
+            None,
+        );
+        assert!(
+            neg_qty.is_err(),
+            "Some(negative) new_quantity must error, got: {:?}",
+            neg_qty
+        );
+    }
+
+    #[test]
+    fn test_create_perp_deposit_and_withdraw_negative_amount_errors() {
+        let config = create_test_config();
+        let signer = AlphaSecSigner::new(config);
+
+        let dep = signer.create_perp_deposit_data("2", Decimal::from_str("-1000").unwrap());
+        assert!(
+            dep.is_err(),
+            "negative deposit amount must error, got: {:?}",
+            dep
+        );
+
+        let wd = signer.create_perp_withdraw_data("2", Decimal::from_str("-1000").unwrap());
+        assert!(
+            wd.is_err(),
+            "negative withdraw amount must error, got: {:?}",
+            wd
+        );
+    }
+
+    // =========================================================================
+    // §3.5 to_onchain_units numeric guards
+    // =========================================================================
+
+    #[test]
+    fn to_onchain_units_rejects_non_finite_with_finite_guard_before_negative_guard() {
+        let nan = AlphaSecSigner::to_onchain_units(f64::NAN, 18);
+        let nan_msg = nan.expect_err("NaN must error").to_string();
+        assert!(
+            nan_msg.contains("finite"),
+            "NaN error must mention 'finite', got: {}",
+            nan_msg
+        );
+
+        let pos_inf = AlphaSecSigner::to_onchain_units(f64::INFINITY, 18);
+        let pos_msg = pos_inf.expect_err("+inf must error").to_string();
+        assert!(
+            pos_msg.contains("finite"),
+            "+inf error must mention 'finite', got: {}",
+            pos_msg
+        );
+
+        // NEG_INFINITY hits the finite guard first, never the negative guard.
+        let neg_inf = AlphaSecSigner::to_onchain_units(f64::NEG_INFINITY, 18);
+        let neg_msg = neg_inf.expect_err("-inf must error").to_string();
+        assert!(
+            neg_msg.contains("finite"),
+            "-inf must hit the finite guard, got: {}",
+            neg_msg
+        );
+        assert!(
+            !neg_msg.contains("non-negative"),
+            "-inf must NOT be reported as a negative-value error, got: {}",
+            neg_msg
+        );
+    }
+
+    #[test]
+    fn to_onchain_units_rejects_negative_but_accepts_zero() {
+        let neg = AlphaSecSigner::to_onchain_units(-1.0, 18);
+        let neg_msg = neg.expect_err("negative must error").to_string();
+        assert!(
+            neg_msg.contains("non-negative"),
+            "negative error must mention 'non-negative', got: {}",
+            neg_msg
+        );
+
+        let zero = AlphaSecSigner::to_onchain_units(0.0, 18).expect("0.0 must be accepted");
+        assert_eq!(zero, U256::zero(), "0.0 must convert to exactly 0");
+    }
+
+    #[test]
+    fn to_onchain_units_overflow_guard_rejects_above_u128_max_but_passes_just_below() {
+        // 1e30 * 10^18 = 1e48 >> u128::MAX (~3.4e38) -> must error, not clamp.
+        let too_big = AlphaSecSigner::to_onchain_units(1e30, 18);
+        assert!(
+            too_big.is_err(),
+            "1e30 at scale 18 must overflow, got: {:?}",
+            too_big
+        );
+
+        // 3e20 * 10^18 = 3e38 < u128::MAX -> must pass (guard boundary actually bites).
+        let just_below = AlphaSecSigner::to_onchain_units(3e20, 18)
+            .expect("3e20 at scale 18 fits in u128 and must succeed");
+        assert!(just_below > U256::zero());
+    }
+
+    #[test]
+    fn to_onchain_units_truncates_toward_zero_not_rounds() {
+        assert_eq!(
+            AlphaSecSigner::to_onchain_units(1.9, 0).unwrap(),
+            U256::from(1u8),
+            "1.9 must truncate to 1"
+        );
+        assert_eq!(
+            AlphaSecSigner::to_onchain_units(2.5, 0).unwrap(),
+            U256::from(2u8),
+            "2.5 must truncate to 2"
+        );
+        assert_eq!(
+            AlphaSecSigner::to_onchain_units(0.4, 0).unwrap(),
+            U256::zero(),
+            "0.4 must truncate to 0"
+        );
+    }
+
+    // =========================================================================
+    // §3.5 session EIP-712 domain.chainId (get_chain_id branch)
+    // =========================================================================
+
+    #[test]
+    fn session_typed_data_domain_chain_id_is_kaia_l1_id_per_network() {
+        // Mainnet -> KAIA mainnet L1 id 8217 (the previously untested branch).
+        let mainnet_signer = AlphaSecSigner::new(create_test_config_mainnet());
+        let mainnet_td = mainnet_signer.create_session_register_typed_data(
+            "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            1,
+            2,
+        );
+        assert_eq!(mainnet_td["domain"]["chainId"], 8217u64);
+
+        // Kairos -> KAIA kairos L1 id 1001, explicitly NOT the AlphaSec L2 ids.
+        let kairos_signer = AlphaSecSigner::new(create_test_config());
+        let kairos_td = kairos_signer.create_session_register_typed_data(
+            "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            1,
+            2,
+        );
+        assert_eq!(kairos_td["domain"]["chainId"], 1001u64);
+        assert_ne!(
+            kairos_td["domain"]["chainId"], 41001u64,
+            "must not be the AlphaSec L2 testnet id"
+        );
+        assert_ne!(
+            kairos_td["domain"]["chainId"], 48217u64,
+            "must not be the AlphaSec L2 mainnet id"
+        );
+    }
+
+    #[test]
+    fn session_typed_data_domain_ignores_chain_id_override() {
+        let config = create_test_config().with_chain_id(99999);
+        let signer = AlphaSecSigner::new(config);
+
+        let typed_data = signer.create_session_register_typed_data(
+            "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            1,
+            2,
+        );
+        assert_eq!(
+            typed_data["domain"]["chainId"], 1001u64,
+            "EIP-712 domain must ignore the chain_id override"
+        );
+    }
+
+    #[test]
+    fn session_typed_data_with_numeric_expiry_nonce_encodes_eip712() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let typed_json = signer.create_session_register_typed_data(
+            "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            123456789,
+            987654321,
+        );
+
+        // The JSON-Number representation of expiry/nonce is pinned by
+        // test_session_register_typed_data; here the whole document must round-trip
+        // through ethers and encode (encode_eip712 succeeding implies valid uint64s).
+        let typed_data: Eip712TypedData =
+            serde_json::from_value(typed_json).expect("typed data must parse as EIP-712");
+        let digest = typed_data
+            .encode_eip712()
+            .expect("encode_eip712 must succeed with numeric uint64 fields");
+        assert_ne!(digest, [0u8; 32], "digest must not be all-zero");
+    }
+
+    // =========================================================================
+    // §3.5 generate_alphasec_transaction — RLP decode of the signed tx
+    // =========================================================================
+
+    #[tokio::test]
+    async fn generated_tx_chain_id_defaults_to_alphasec_l2_ids_not_kaia_l1() {
+        let kairos = AlphaSecSigner::new(create_test_config());
+        let kairos_hex = kairos
+            .generate_alphasec_transaction(Some(1), &[0x23], None)
+            .await
+            .unwrap();
+        let kairos_tx = decode_signed_tx(&kairos_hex);
+        let kairos_id = kairos_tx.chain_id().expect("chain id must be set").as_u64();
+        assert_eq!(kairos_id, 41001, "Kairos default must be the L2 id 41001");
+        assert_ne!(kairos_id, 1001, "must NOT be the KAIA L1 kairos id");
+
+        let mainnet = AlphaSecSigner::new(create_test_config_mainnet());
+        let mainnet_hex = mainnet
+            .generate_alphasec_transaction(Some(1), &[0x23], None)
+            .await
+            .unwrap();
+        let mainnet_tx = decode_signed_tx(&mainnet_hex);
+        assert_eq!(
+            mainnet_tx
+                .chain_id()
+                .expect("chain id must be set")
+                .as_u64(),
+            48217,
+            "Mainnet default must be the L2 id 48217"
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_tx_respects_explicit_chain_id_override() {
+        let signer = AlphaSecSigner::new(create_test_config().with_chain_id(12345));
+        let tx_hex = signer
+            .generate_alphasec_transaction(Some(1), &[0x23], None)
+            .await
+            .unwrap();
+        let tx = decode_signed_tx(&tx_hex);
+        assert_eq!(
+            tx.chain_id().expect("chain id must be set").as_u64(),
+            12345,
+            "L2 signing path must respect the chain_id override"
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_tx_pins_to_value_data_and_nonce() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let calldata: Vec<u8> = vec![0xde, 0xad, 0xbe, 0xef, 0x00, 0x7b];
+        let timestamp_ms: u64 = 1_717_171_717_171;
+
+        let tx_hex = signer
+            .generate_alphasec_transaction(Some(timestamp_ms), &calldata, None)
+            .await
+            .unwrap();
+        let tx = decode_signed_tx(&tx_hex);
+
+        // to == order precompile contract
+        let to = match tx.to().expect("to must be set") {
+            ethers::types::NameOrAddress::Address(addr) => *addr,
+            other => panic!("expected a plain address, got: {:?}", other),
+        };
+        assert_eq!(to, ALPHASEC_ORDER_CONTRACT_ADDR.parse::<Address>().unwrap());
+
+        // value == 0 (expect() keeps this fail-loud like the to/data/nonce assertions:
+        // an absent decoded value must flag the decode gap, not pass as 0)
+        assert_eq!(
+            *tx.value().expect("value must be set"),
+            U256::zero(),
+            "tx value must be exactly 0"
+        );
+
+        // data == exact input bytes
+        assert_eq!(
+            tx.data().expect("data must be set").as_ref(),
+            calldata.as_slice(),
+            "calldata must round-trip byte-for-byte"
+        );
+
+        // nonce == timestamp_ms argument
+        assert_eq!(
+            *tx.nonce().expect("nonce must be set"),
+            U256::from(timestamp_ms),
+            "nonce must be the provided timestamp_ms"
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_tx_zero_timestamp_yields_nonce_zero() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let tx_hex = signer
+            .generate_alphasec_transaction(Some(0), &[0x23], None)
+            .await
+            .unwrap();
+        let tx = decode_signed_tx(&tx_hex);
+        assert_eq!(
+            *tx.nonce().expect("nonce must be set"),
+            U256::zero(),
+            "Some(0) timestamp must yield nonce 0, not the current time"
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_tx_empty_calldata_is_ok_and_stays_empty() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let result = signer
+            .generate_alphasec_transaction(Some(1), &[], None)
+            .await;
+        let tx_hex = result.expect("empty calldata must be signable");
+        let tx = decode_signed_tx(&tx_hex);
+        // ethers decodes an empty calldata byte string as an ABSENT data field (None) -
+        // pin that exact representation instead of a lenient "None or empty" check:
+        // injected bytes would surface as Some(non-empty) and fail loudly here.
+        assert!(
+            tx.data().is_none(),
+            "empty calldata must decode to an absent data field, got: {:?}",
+            tx.data()
+        );
+    }
+
+    // =========================================================================
+    // §3.5 transfer builders
+    // =========================================================================
+
+    #[test]
+    fn token_transfer_space_stripping_corrupts_values_inside_strings() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let data = signer
+            .create_token_transfer_data("0xrecipient", 1.0, "US DT")
+            .unwrap();
+
+        // Not a single space byte survives anywhere in the payload.
+        assert!(
+            !data[1..].contains(&b' '),
+            "payload must contain no space bytes at all"
+        );
+
+        // The space inside the token VALUE was destroyed: "US DT" -> "USDT".
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+        assert_eq!(
+            json["token"], "USDT",
+            "replace(\" \", \"\") must strip spaces inside values too"
+        );
+    }
+
+    #[test]
+    fn value_transfer_command_byte_0x02_and_unscaled_decimal_value() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let data = signer
+            .create_value_transfer_data("0xrecipient", Decimal::from_str("1.5").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            data[0], 0x02,
+            "first byte must be DEX_COMMAND_TRANSFER (0x02)"
+        );
+
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+        assert_eq!(
+            json["value"], "1.5",
+            "value must be the unscaled human amount"
+        );
+    }
+
+    #[test]
+    fn transfer_builders_do_not_share_numeric_formatting() {
+        let signer = AlphaSecSigner::new(create_test_config());
+
+        // Decimal path: trailing zero is preserved.
+        let value_tx = signer
+            .create_value_transfer_data("0xrecipient", Decimal::from_str("100.0").unwrap())
+            .unwrap();
+        let value_json: serde_json::Value = serde_json::from_slice(&value_tx[1..]).unwrap();
+        assert_eq!(
+            value_json["value"], "100.0",
+            "Decimal path must keep the scale"
+        );
+
+        // f64 path: Display drops the trailing zero for the same human amount.
+        let token_tx = signer
+            .create_token_transfer_data("0xrecipient", 100.0, "USDT")
+            .unwrap();
+        let token_json: serde_json::Value = serde_json::from_slice(&token_tx[1..]).unwrap();
+        assert_eq!(token_json["value"], "100", "f64 path must drop the scale");
+
+        assert_ne!(
+            value_json["value"], token_json["value"],
+            "same human amount must format differently on the two paths"
+        );
+    }
+
+    #[test]
+    fn transfer_payload_l1owner_is_key_derived_lowercase_without_debug_quotes() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let expected = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+
+        let value_tx = signer
+            .create_value_transfer_data("0xrecipient", Decimal::from_str("1").unwrap())
+            .unwrap();
+        let token_tx = signer
+            .create_token_transfer_data("0xrecipient", 1.0, "USDT")
+            .unwrap();
+
+        for (name, payload) in [("value", value_tx), ("token", token_tx)] {
+            let json: serde_json::Value = serde_json::from_slice(&payload[1..]).unwrap();
+            let owner = json["l1owner"].as_str().expect("l1owner must be a string");
+            assert_eq!(
+                owner, expected,
+                "{} transfer l1owner must be lowercase key-derived",
+                name
+            );
+            assert!(
+                !owner.contains('"'),
+                "{} transfer l1owner must not contain Debug-quote artifacts: {}",
+                name,
+                owner
+            );
+        }
+    }
+
+    // =========================================================================
+    // §3.5 create_order_data — market/limit branch + TPSL gate
+    // =========================================================================
+
+    #[test]
+    fn market_order_keeps_quantity_raw_but_normalizes_price() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let data = signer
+            .create_order_data(
+                "KAIA",
+                "USDT",
+                0,
+                Decimal::from_str("0.123456789").unwrap(),
+                Decimal::from_str("123.456789").unwrap(),
+                OrderType::Market as u32, // 1
+                0,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        // Quantity passes through untouched on the Market branch.
+        assert_eq!(
+            json["quantity"], "123.456789",
+            "Market order quantity must stay unnormalized"
+        );
+        // Price is still normalized (band >= 0.1 -> 5 dp).
+        assert_eq!(
+            json["price"], "0.12346",
+            "Market order price must be normalized"
+        );
+    }
+
+    #[test]
+    fn limit_order_normalizes_both_price_and_quantity() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let data = signer
+            .create_order_data(
+                "KAIA",
+                "USDT",
+                0,
+                Decimal::from_str("0.123456789").unwrap(),
+                Decimal::from_str("123.456789").unwrap(),
+                OrderType::Limit as u32, // 0
+                0,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&data[1..]).unwrap();
+
+        assert_eq!(
+            json["price"], "0.12346",
+            "Limit order price must be normalized"
+        );
+        assert_eq!(
+            json["quantity"], "123.5",
+            "Limit order quantity must be normalized by the price band"
+        );
+    }
+
+    #[test]
+    fn sl_limit_alone_is_silently_dropped_from_tpsl() {
+        let signer = AlphaSecSigner::new(create_test_config());
+        let price = Decimal::from_str("1.2345").unwrap();
+        let qty = Decimal::from_str("10").unwrap();
+        let aux = Decimal::from_str("1.1").unwrap();
+
+        // sl_limit ALONE -> no tpsl key at all (silently dropped).
+        let sl_limit_only = signer
+            .create_order_data("KAIA", "USDT", 0, price, qty, 0, 0, None, None, Some(aux))
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&sl_limit_only[1..]).unwrap();
+        assert!(
+            json.get("tpsl").is_none(),
+            "sl_limit alone must NOT produce a tpsl key, got: {}",
+            json
+        );
+
+        // sl_trigger alone DOES open the gate.
+        let sl_trigger_only = signer
+            .create_order_data("KAIA", "USDT", 0, price, qty, 0, 0, None, Some(aux), None)
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&sl_trigger_only[1..]).unwrap();
+        assert!(
+            json.get("tpsl").is_some(),
+            "sl_trigger alone must produce tpsl"
+        );
+        assert_eq!(json["tpsl"]["slTrigger"], "1.1");
+
+        // tp_limit alone DOES open the gate.
+        let tp_limit_only = signer
+            .create_order_data("KAIA", "USDT", 0, price, qty, 0, 0, Some(aux), None, None)
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&tp_limit_only[1..]).unwrap();
+        assert!(
+            json.get("tpsl").is_some(),
+            "tp_limit alone must produce tpsl"
+        );
+        assert_eq!(json["tpsl"]["tpLimit"], "1.1");
     }
 }

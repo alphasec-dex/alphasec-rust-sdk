@@ -143,3 +143,34 @@ impl AlphaSecError {
         Self::Generic(message.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_display_interpolates_code_verbatim_with_colon_separator() {
+        assert_eq!(
+            AlphaSecError::api(400, "bad request").to_string(),
+            "API error 400: bad request"
+        );
+        // Negative code must not be absolute-valued or zero-coerced.
+        assert_eq!(AlphaSecError::api(-1, "x").to_string(), "API error -1: x");
+        // Code 0 must still be printed, not treated as "no code".
+        assert_eq!(
+            AlphaSecError::api(0, "zero").to_string(),
+            "API error 0: zero"
+        );
+    }
+
+    #[test]
+    fn api_display_preserves_message_verbatim_including_empty_and_colons() {
+        // Empty message: separator retained, no panic.
+        assert_eq!(AlphaSecError::api(500, "").to_string(), "API error 500: ");
+        // Colons inside the message must survive untouched.
+        assert_eq!(
+            AlphaSecError::api(502, "a: b: c").to_string(),
+            "API error 502: a: b: c"
+        );
+    }
+}

@@ -54,7 +54,7 @@ pub struct WsConfig {
 impl Default for WsConfig {
     fn default() -> Self {
         Self {
-            url: "wss://api.alphasec.io/ws".to_string(),
+            url: "wss://api-testnet.alphasec.trade/ws".to_string(),
             max_reconnect_attempts: 0, // Infinite retries
             reconnect_delay: Duration::from_secs(1),
             max_reconnect_delay: Duration::from_secs(30),
@@ -165,6 +165,21 @@ impl Clone for WsManager {
     }
 }
 
+/// True if a WS frame's channel names a perp stream (`perp_*`). Such frames must be
+/// forwarded as `WebSocketMessage::Generic` so callers can decode them with
+/// `decode_perp_event` — the spot typed variants would otherwise classify them by
+/// payload shape (e.g. perp_aggTrade as a spot trade) and drop perp-only fields.
+fn is_perp_channel(v: &serde_json::Value) -> bool {
+    v.get("channel")
+        .and_then(|c| c.as_str())
+        .or_else(|| {
+            v.get("params")
+                .and_then(|p| p.get("channel"))
+                .and_then(|c| c.as_str())
+        })
+        .is_some_and(|c| c.starts_with("perp_"))
+}
+
 impl WsManager {
     /// Create a new WebSocket manager
     pub fn new(config: WsConfig) -> Self {
@@ -216,7 +231,7 @@ impl WsManager {
                 stats,
                 outgoing_sender,
             )
-                .await;
+            .await;
         });
         self.control_task = Some(handle);
 
@@ -468,8 +483,9 @@ impl WsManager {
             let subs = subscriptions.lock().await;
             for (id, channel) in subs.iter() {
                 let subscribe_msg = serde_json::json!({
+                    "jsonrpc": "2.0",
                     "method": "subscribe",
-                    "params": [channel],
+                    "params": {"channels": [channel]},
                     "id": id
                 });
                 if let Err(e) = outgoing_tx.send(Message::Text(subscribe_msg.to_string())) {
@@ -493,9 +509,23 @@ impl WsManager {
                                 stats_guard.messages_received += 1;
                             }
 
-                            // Parse and send to message channel
-                            match serde_json::from_str::<WebSocketMessage>(&text) {
-                                Ok(msg) => {
+                            // Parse and send to message channel.
+                            // Perp channels (`perp_*`) are forwarded as Generic so callers can
+                            // route them through decode_perp_event; the spot typed variants match
+                            // by payload shape, and perp_aggTrade collides with the spot trade
+                            // shape (which drops isLiquidation/isAdl and hides it from the perp
+                            // decoder). Spot frames keep their existing typed parsing.
+                            //
+                            // Parse the JSON once: perp frames become Generic; spot frames take the
+                            // typed parse off the SAME value, falling back to Generic on no match.
+                            match serde_json::from_str::<serde_json::Value>(&text) {
+                                Ok(value) => {
+                                    let msg = if is_perp_channel(&value) {
+                                        WebSocketMessage::Generic(value)
+                                    } else {
+                                        serde_json::from_value::<WebSocketMessage>(value.clone())
+                                            .unwrap_or(WebSocketMessage::Generic(value))
+                                    };
                                     // Filter out internal messages and acks
                                     let should_forward = match &msg {
                                         WebSocketMessage::Ack { .. } => {
@@ -536,19 +566,9 @@ impl WsManager {
                                     }
                                 },
                                 Err(e) => {
-                                    // If parsing fails, try to parse as generic JSON and forward
-                                    match serde_json::from_str::<serde_json::Value>(&text) {
-                                        Ok(value) => {
-                                            debug!("Forwarding unparseable message as generic: {}", text);
-                                            let generic_msg = WebSocketMessage::Generic(value);
-                                            if let Err(_) = message_tx.send(generic_msg) {
-                                                warn!("Failed to send generic message, continuing...");
-                                            }
-                                        },
-                                        Err(_) => {
-                                            warn!("Failed to parse WebSocket message as JSON: {} - {}", e, text);
-                                        }
-                                    }
+                                    // Not valid JSON at all (a valid-JSON frame that matches no
+                                    // typed variant is already handled as Generic above).
+                                    warn!("Failed to parse WebSocket message as JSON: {} - {}", e, text);
                                 }
                             }
                         },
@@ -622,6 +642,7 @@ impl WsManager {
                         ManagerCommand::Subscribe { id, channel } => {
                             debug!("Sending subscribe message: {}", channel);
                             let subscribe_msg = serde_json::json!({
+                                "jsonrpc": "2.0",
                                 "method": "subscribe",
                                 "params": {"channels": [channel]},
                                 "id": id
@@ -632,6 +653,7 @@ impl WsManager {
                         },
                         ManagerCommand::Unsubscribe { id, channel } => {
                             let unsubscribe_msg = serde_json::json!({
+                                "jsonrpc": "2.0",
                                 "method": "unsubscribe",
                                 "params": {"channels": [channel]},
                                 "id": id

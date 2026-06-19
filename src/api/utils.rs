@@ -80,3 +80,128 @@ pub fn token_id_to_symbol(
         .ok_or_else(|| AlphaSecError::not_found(format!("Token not found: {}", token_id)))?;
     Ok(symbol.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn symbol_map() -> HashMap<String, u32> {
+        let mut map = HashMap::new();
+        map.insert("BTC".to_string(), 1);
+        map.insert("USDT".to_string(), 2);
+        map
+    }
+
+    fn id_map() -> HashMap<u32, String> {
+        let mut map = HashMap::new();
+        map.insert(1, "BTC".to_string());
+        map.insert(2, "USDT".to_string());
+        map
+    }
+
+    #[test]
+    fn market_to_market_id_keeps_base_before_quote() {
+        let id = market_to_market_id("BTC/USDT", &symbol_map()).unwrap();
+        assert_eq!(id, "1_2", "flipped base/quote would produce 2_1");
+    }
+
+    #[test]
+    fn market_to_market_id_rejects_wrong_slash_count() {
+        for input in ["BTCUSDT", "A/B/C", ""] {
+            let err = market_to_market_id(input, &symbol_map()).unwrap_err();
+            assert!(
+                matches!(err, AlphaSecError::InvalidParameter(_)),
+                "input {:?}: expected InvalidParameter, got {:?}",
+                input,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn market_to_market_id_empty_base_reports_base_not_found() {
+        let err = market_to_market_id("/USDT", &symbol_map()).unwrap_err();
+        match err {
+            AlphaSecError::NotFound(msg) => {
+                assert!(msg.contains("Base token not found"), "got: {}", msg);
+                assert!(
+                    !msg.contains("Quote"),
+                    "base failure must not blame quote: {}",
+                    msg
+                );
+            }
+            other => panic!("expected NotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn market_to_market_id_empty_quote_reports_quote_not_found() {
+        let err = market_to_market_id("BTC/", &symbol_map()).unwrap_err();
+        match err {
+            AlphaSecError::NotFound(msg) => {
+                assert!(msg.contains("Quote token not found"), "got: {}", msg);
+                assert!(
+                    !msg.contains("Base"),
+                    "quote failure must not blame base: {}",
+                    msg
+                );
+            }
+            other => panic!("expected NotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn market_id_to_market_rejects_non_numeric_and_negative_ids() {
+        for input in ["a_2", "-1_2"] {
+            let err = market_id_to_market(input, &id_map()).unwrap_err();
+            assert!(
+                matches!(err, AlphaSecError::InvalidParameter(_)),
+                "input {:?}: expected InvalidParameter, got {:?}",
+                input,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn market_id_to_market_rejects_wrong_underscore_count() {
+        for input in ["1-2", "1_2_3"] {
+            let err = market_id_to_market(input, &id_map()).unwrap_err();
+            assert!(
+                matches!(err, AlphaSecError::InvalidParameter(_)),
+                "input {:?}: expected InvalidParameter, got {:?}",
+                input,
+                err
+            );
+        }
+    }
+
+    #[test]
+    fn market_conversion_roundtrips_in_both_directions() {
+        let sm = symbol_map();
+        let im = id_map();
+
+        let id = market_to_market_id("BTC/USDT", &sm).unwrap();
+        assert_eq!(market_id_to_market(&id, &im).unwrap(), "BTC/USDT");
+
+        // Reversed pair is an independent valid input; ordering must survive too.
+        let market = market_id_to_market("2_1", &im).unwrap();
+        assert_eq!(market, "USDT/BTC");
+        assert_eq!(market_to_market_id(&market, &sm).unwrap(), "2_1");
+    }
+
+    #[test]
+    fn token_id_to_symbol_treats_zero_as_regular_key() {
+        let mut map = HashMap::new();
+        map.insert(0u32, "NATIVE".to_string());
+        assert_eq!(token_id_to_symbol(0, &map).unwrap(), "NATIVE");
+
+        let empty: HashMap<u32, String> = HashMap::new();
+        let err = token_id_to_symbol(0, &empty).unwrap_err();
+        assert!(
+            matches!(err, AlphaSecError::NotFound(_)),
+            "missing id 0 must be NotFound, got {:?}",
+            err
+        );
+    }
+}

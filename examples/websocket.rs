@@ -1,9 +1,9 @@
 //! This example demonstrates how to use the WebSocket client in a channel-based
 
 use alphasec_rs::{Agent, Config};
-use tokio::time::{Duration, Instant, interval, sleep};
-use tracing::{error, info, Level};
+use tokio::time::{interval, sleep, Duration, Instant};
 use tokio_tungstenite::tungstenite::Message;
+use tracing::{error, info, Level};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,11 +16,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create configuration for Kairos testnet
     let config = Config::new(
-        // "https://api-testnet.alphasec.trade",
-        "https://api-qa.dexor.trade",
+        "https://api-testnet.alphasec.trade",
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c",
-        Some("0xca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"),
+        "0x0000000000000000000000000000000000000000",
+        Some("0x0000000000000000000000000000000000000000000000000000000000000000"),
         None,  // L2 key, no session
         false, // L1 key, no session
         None,  // Chain ID
@@ -44,16 +43,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sub2 = agent.subscribe("trade@BTC/USDT").await?;
     let sub3 = agent.subscribe("depth@BTC/USDT").await?;
     let sub4 = agent
-        .subscribe("userEvent@0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c")
+        .subscribe("userEvent@0x0000000000000000000000000000000000000000")
         .await?;
 
     // info!("📡 Subscribed to channels: ticker={}, trades={}, depth={}, userEvent={}", sub1, sub2, sub3, sub4);
     info!("📡 Subscribed to channels userEvent = {}", sub4);
 
     // Spawn a task to process messages
-    let ws_sender = agent
-        .get_ws_sender()
-        .await.unwrap();
+    let ws_sender = agent.get_ws_sender().await.unwrap();
 
     let message_processor = tokio::spawn(async move {
         let mut message_count = 0;
@@ -87,8 +84,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 alphasec_rs::types::WebSocketMessage::TradeMsg { params, .. } => {
                     for trade in &params.result {
-                        info!("💱 Trade update #{}: channel={}, trade_id={}, market_id={}, price={}, quantity={}, buy_order_id={}, sell_order_id={}, created_at={}, is_buyer_maker={}", 
-                          message_count, params.channel, trade.trade_id, trade.market_id, 
+                        info!("💱 Trade update #{}: channel={}, trade_id={}, market_id={}, price={}, quantity={}, buy_order_id={}, sell_order_id={}, created_at={}, is_buyer_maker={}",
+                          message_count, params.channel, trade.trade_id, trade.market_id,
                           trade.price, trade.quantity, trade.buy_order_id, trade.sell_order_id, trade.created_at, trade.is_buyer_maker);
                     }
                 }
@@ -129,13 +126,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 alphasec_rs::types::WebSocketMessage::UserEventMsg { params, .. } => {
                     match &params.result {
                         alphasec_rs::types::UserEventResult::Order { base, order } => {
-                            info!("👤 User event (ORDER) #{}: channel={}, topic={}, type={}, order_id={}, status={}, market={}, side={}, last_price={}, last_qty={}, trade_id={}", 
-                                  message_count, params.channel, params.result.topic(), base.event_type, 
+                            info!("👤 User event (ORDER) #{}: channel={}, topic={}, type={}, order_id={}, status={}, market={}, side={}, last_price={}, last_qty={}, trade_id={}",
+                                  message_count, params.channel, params.result.topic(), base.event_type,
                                   order.order_id, order.status, order.market_id, order.side, order.last_price, order.last_qty, order.trade_id);
                         }
                         alphasec_rs::types::UserEventResult::Account { base, account } => {
-                            info!("👤 User event (ACCOUNT) #{}: channel={}, topic={}, type={}, token_id={}, amount={}, from={:?}, to={:?}", 
-                                  message_count, params.channel, params.result.topic(), base.event_type, 
+                            info!("👤 User event (ACCOUNT) #{}: channel={}, topic={}, type={}, token_id={}, amount={}, from={:?}, to={:?}",
+                                  message_count, params.channel, params.result.topic(), base.event_type,
                                   account.token_id, account.amount, account.from_address, account.to_address);
                         }
                     }

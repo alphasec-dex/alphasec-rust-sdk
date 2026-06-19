@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to fetch wallet transfer history on the L2 network
 
-use alphasec_rs::{Agent, Config};
+use alphasec_rs::{types::constants::chain_ids::ALPHASEC_TESTNET_CHAIN_ID, Agent, Config};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -16,11 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new(
         "https://api-testnet.alphasec.trade",
         "kairos",
-        "0x70dBb395AF2eDCC2833D803C03AbBe56ECe7c25c", // Your L1 address
-        Some("ca8c450e6775a185f2df9b41b97f03906343f0703bdeaa86200caae8605d0ff8"), // Your private key (no 0x prefix)
-        None,  // L2 key, no session
-        false, // L1 key, no session
-        Some(102), // Chain ID for testnet
+        "0x0000000000000000000000000000000000000000", // Your L1 address
+        Some("0000000000000000000000000000000000000000000000000000000000000000"), // Your private key (no 0x prefix)
+        None,                            // L2 key, no session
+        false,                           // L1 key, no session
+        Some(ALPHASEC_TESTNET_CHAIN_ID), // Chain ID for testnet
     )?;
 
     // Create Agent
@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get all transfer history (default limit: 100)
     info!("=== Getting Transfer History ===");
-    match agent.get_transfer_history(address, None, None, None, None).await {
+    match agent
+        .get_transfer_history(address, None, None, None, None)
+        .await
+    {
         Ok(transfers) => {
             info!("📋 Found {} transfers", transfers.len());
             for transfer in transfers.iter().take(5) {
@@ -53,7 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example: Get transfers with token_id filter
     info!("\n=== Getting Transfers for token_id=2 ===");
-    match agent.get_transfer_history(address, Some(2), None, None, None).await {
+    match agent
+        .get_transfer_history(address, Some(2), None, None, None)
+        .await
+    {
         Ok(transfers) => {
             info!("📋 Found {} transfers for token_id=2", transfers.len());
         }
@@ -62,7 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example: Get transfers with limit
     info!("\n=== Getting Transfers with limit=1 ===");
-    match agent.get_transfer_history(address, None, None, None, Some(1)).await {
+    match agent
+        .get_transfer_history(address, None, None, None, Some(1))
+        .await
+    {
         Ok(transfers) => {
             info!("📋 Found {} transfers with limit=1", transfers.len());
         }

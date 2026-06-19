@@ -304,3 +304,55 @@ impl OrdersQuery {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn order_side_u32_discriminants_and_unknown_fallback_to_buy() {
+        assert_eq!(OrderSide::from(0u32), OrderSide::Buy);
+        assert_eq!(OrderSide::from(1u32), OrderSide::Sell);
+        // Documented fallback: any unknown value maps to Buy.
+        assert_eq!(OrderSide::from(2u32), OrderSide::Buy);
+        assert_eq!(OrderSide::from(u32::MAX), OrderSide::Buy);
+        // Reverse direction pins the `as u32` discriminants.
+        assert_eq!(u32::from(OrderSide::Buy), 0);
+        assert_eq!(u32::from(OrderSide::Sell), 1);
+    }
+
+    #[test]
+    fn order_type_u32_mapping_and_unknown_fallback_to_limit() {
+        assert_eq!(OrderType::from(0u32), OrderType::Limit);
+        assert_eq!(OrderType::from(1u32), OrderType::Market);
+        assert_eq!(OrderType::from(99u32), OrderType::Limit);
+        assert_eq!(u32::from(OrderType::Market), 1);
+    }
+
+    #[test]
+    fn order_mode_u32_mapping_and_unknown_fallback_to_base() {
+        assert_eq!(OrderMode::from(0u32), OrderMode::Base);
+        assert_eq!(OrderMode::from(1u32), OrderMode::Quote);
+        assert_eq!(OrderMode::from(255u32), OrderMode::Base);
+        assert_eq!(u32::from(OrderMode::Quote), 1);
+    }
+
+    #[test]
+    fn serde_representation_is_variant_name_string_not_numeric() {
+        assert_eq!(serde_json::to_string(&OrderSide::Buy).unwrap(), "\"Buy\"");
+        assert_eq!(serde_json::to_string(&OrderSide::Sell).unwrap(), "\"Sell\"");
+        assert_eq!(
+            serde_json::to_string(&OrderType::Limit).unwrap(),
+            "\"Limit\""
+        );
+        assert_eq!(serde_json::to_string(&OrderMode::Base).unwrap(), "\"Base\"");
+        // The numeric representation belongs ONLY to From<u32>: serde must reject it.
+        // (From<u32> maps 1 -> Sell, but JSON `1` is not a valid OrderSide.)
+        assert!(serde_json::from_str::<OrderSide>("1").is_err());
+        // Round-trip through the string form stays lossless.
+        assert_eq!(
+            serde_json::from_str::<OrderSide>("\"Sell\"").unwrap(),
+            OrderSide::Sell
+        );
+    }
+}

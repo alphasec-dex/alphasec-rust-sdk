@@ -3,15 +3,21 @@
 //! Provides a unified interface for all AlphaSec operations including
 //! market data, trading, and WebSocket.
 
+use std::sync::Arc;
+
+pub use crate::types::account::{Transfer, TransferHistoryQuery};
 use crate::{
     api::ApiClient,
     endpoints,
     error::{AlphaSecError, Result},
+    perp::{
+        agent::{MarketCache, PerpAgent},
+        client::PerpApiClient,
+    },
     session_commands::{SESSION_COMMAND_DELETE, SESSION_COMMAND_UPDATE},
     signer::{AlphaSecSigner, Config},
     types::{account::*, market::*, orders::*, session_commands::SESSION_COMMAND_CREATE},
 };
-pub use crate::types::account::{Transfer, TransferHistoryQuery};
 
 #[cfg(feature = "websocket")]
 use crate::websocket::{WsConfig, WsManager};
@@ -45,6 +51,10 @@ pub struct Agent {
     trade_ws: Option<TradeWebSocket>,
     /// Configuration
     config: Config,
+    /// REST client for /fapi/v1 perp endpoints
+    perp_client: PerpApiClient,
+    /// Lazy symbol → market_id cache for perp operations (shared across clone)
+    market_cache: Arc<MarketCache>,
 }
 
 impl Agent {
@@ -67,9 +77,10 @@ impl Agent {
     ///         "0x1234567890123456789012345678901234567890",
     ///         Some("l1_private_key"),
     ///         None,
-    ///         true
+    ///         true,
+    ///         None
     ///     )?;
-    ///     
+    ///
     ///     let agent = Agent::new(config).await?;
     ///     Ok(())
     /// }
@@ -100,6 +111,9 @@ impl Agent {
             config.network
         );
 
+        let perp_client = PerpApiClient::new(&config)?;
+        let market_cache = MarketCache::new();
+
         Ok(Self {
             api,
             signer,
@@ -108,6 +122,8 @@ impl Agent {
             #[cfg(feature = "websocket")]
             trade_ws: None,
             config,
+            perp_client,
+            market_cache,
         })
     }
 
@@ -157,7 +173,8 @@ impl Agent {
     ///         "0x1234567890123456789012345678901234567890",
     ///         Some("l1_private_key"),
     ///         None,
-    ///         true
+    ///         true,
+    ///         None
     ///     )?;
     ///     let mut agent = Agent::new(config).await?;
     ///     agent.start().await?;
@@ -202,9 +219,15 @@ impl Agent {
                 // Use address directly
                 format!("userEvent@{}", target)
             }
+            // Perp channels (perp_markPrice / perp_ticker / perp_aggTrade / perp_aggDepth /
+            // perp_candle) already use a numeric marketId (candle: `marketId:resolution`), so
+            // they bypass the spot market-name→id conversion and pass through verbatim.
+            t if t.starts_with("perp_") => {
+                format!("{}@{}", t, target)
+            }
             _ => {
                 return Err(AlphaSecError::invalid_parameter(format!(
-                    "Unsupported channel type: {}. Use 'trade', 'ticker', 'depth', or 'userEvent'",
+                    "Unsupported channel type: {}. Use 'trade', 'ticker', 'depth', 'userEvent', or 'perp_*'",
                     channel_type
                 )));
             }
@@ -286,7 +309,9 @@ impl Agent {
         if let Some(ref trade_ws) = self.trade_ws {
             trade_ws.connect().await
         } else {
-            Err(crate::error::AlphaSecError::network("Trade WebSocket not enabled"))
+            Err(crate::error::AlphaSecError::network(
+                "Trade WebSocket not enabled",
+            ))
         }
     }
 
@@ -1036,5 +1061,40 @@ impl Agent {
     /// Check if session is enabled
     pub fn is_session_enabled(&self) -> bool {
         self.signer.is_session_enabled()
+    }
+
+    /// Access perpetual futures operations via the PerpAgent sub-facade.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use alphasec_rs::{Agent, Config};
+    /// use rust_decimal::Decimal;
+    /// use alphasec_rs::types::orders::OrderSide;
+    /// use alphasec_rs::perp::types::TimeInForce;
+    /// use std::str::FromStr;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let config = Config::new("https://api.example.com", "kairos",
+    ///         "0xADDRESS", Some("PRIVATE_KEY"), None, false, None)?;
+    ///     let agent = Agent::new(config).await?;
+    ///
+    ///     let tx_hash = agent.perp()
+    ///         .order("BTCUSDT", OrderSide::Buy,
+    ///             Decimal::from_str("90000")?, Decimal::from_str("0.5")?,
+    ///             TimeInForce::Gtc, false, None)
+    ///         .await?;
+    ///     println!("tx: {}", tx_hash);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn perp(&self) -> PerpAgent<'_> {
+        PerpAgent::new(
+            &self.signer,
+            &self.perp_client,
+            self.signer.l1_address(),
+            Arc::clone(&self.market_cache),
+        )
     }
 }
