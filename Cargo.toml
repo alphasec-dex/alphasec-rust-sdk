@@ -1,6 +1,6 @@
 [package]
 name = "alphasec-rs"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT"
 description = "Complete Rust SDK for AlphaSec DEX - A comprehensive trading SDK with signing capabilities"
