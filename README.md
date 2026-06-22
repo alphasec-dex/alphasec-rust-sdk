@@ -7,7 +7,7 @@ A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX, built 
 
 ## 🔗 Links
 
-- [Official](https://alphasec.io)
+- [Official](https://alphasec.trade)
 - [Telegram](https://t.me/alphasecofficial)
 - [Discord](https://discord.gg/alphasec)
 - [X](https://x.com/AlphaSec_Trade)
@@ -15,6 +15,7 @@ A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX, built 
 ## 🌐 Network Information
 
 ### Kairos Testnet
+
 - **API URL**: `https://api.alphasec.trade`
 - **Websocket URL**: `wss://api.alphasec.trade/ws`
 - **Network**: `kairos`
@@ -22,6 +23,7 @@ A comprehensive Rust SDK for interacting with the AlphaSec orderbook DEX, built 
 - **L2 Chain ID**: 412346 (AlphaSec L2)
 
 ### Mainnet
+
 - **API URL**: `https://api-testnet.alphasec.trade`
 - **Websocket URL**: `wss://api-testnet.alphasec.trade/ws`
 - **Network**: `mainnet`
@@ -180,24 +182,29 @@ agent.stop().await;
 The SDK includes several focused examples for different use cases:
 
 ### Basic Examples (No Dependencies)
+
 - [`get_market_data.rs`](examples/get_market_data.rs) - Market list only
 - [`get_tokens.rs`](examples/get_tokens.rs) - Available tokens only
 - [`get_tickers.rs`](examples/get_tickers.rs) - Ticker information only
 - [`get_balance.rs`](examples/get_balance.rs) - Account balance only
 
 ### Trading Examples (Independent)
+
 - [`place_buy_order.rs`](examples/place_buy_order.rs) - Single buy order only
 - [`place_sell_order.rs`](examples/place_sell_order.rs) - Single sell order only
 - [`cancel_all_orders.rs`](examples/cancel_all_orders.rs) - Cancel all orders only
 
 ### Transfer Examples (Independent)
+
 - [`transfer_kaia.rs`](examples/transfer_kaia.rs) - Native KAIA transfer only
 - [`transfer_usdt.rs`](examples/transfer_usdt.rs) - USDT token transfer only
 
 ### WebSocket Examples (Independent)
+
 - [`websocket.rs`](examples/websocket.rs) - Multi-channel subscription demo
 
 ### Running Examples
+
 ```bash
 cargo run --example get_market_data
 cargo run --example get_tokens

@@ -1,17 +1,20 @@
 [package]
 name = "alphasec-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Complete Rust SDK for AlphaSec DEX - A comprehensive trading SDK with signing capabilities"
 homepage = "https://alphasec.io/"
 readme = "README.md"
-repository = "https://github.com/alphasec-dex/alphasec-rust-sdk"
+repository = "https://github.com/alphasec-dex/alphasec-rs"
 authors = ["AlphaSec Team"]
 
 [dependencies]
 # HTTP client and async runtime
-reqwest = { version = "0.12", features = ["json", "native-tls"], default-features = false }
+reqwest = { version = "0.12", features = [
+    "json",
+    "native-tls",
+], default-features = false }
 
 tokio = { version = "1.0", features = ["full"] }
 
@@ -40,7 +43,10 @@ rust_decimal = { version = "1.0", features = ["serde", "serde-with-str"] }
 async-trait = "0.1"
 
 # WebSocket utilities
-tokio-tungstenite = { version = "0.20", features = ["native-tls", "connect"], default-features = false, optional = true }
+tokio-tungstenite = { version = "0.20", features = [
+    "native-tls",
+    "connect",
+], default-features = false, optional = true }
 futures-util = { version = "0.3", optional = true }
 
 # Logging
