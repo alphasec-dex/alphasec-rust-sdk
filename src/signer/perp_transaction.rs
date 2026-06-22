@@ -11,8 +11,8 @@ pub struct PerpOrderModel {
     #[serde(rename = "marketId")]
     pub market_id: u64,
     pub side: u8,         // 0=Buy, 1=Sell
-    pub price: String,    // 18 decimal big.Int string
-    pub quantity: String, // 18 decimal big.Int string
+    pub price: String,    // human-readable decimal (quoted on wire; node scales 1e18)
+    pub quantity: String, // human-readable decimal (quoted on wire; node scales 1e18)
     #[serde(rename = "isReduceOnly")]
     pub is_reduce_only: bool,
     #[serde(rename = "timeInForce")]
@@ -22,56 +22,14 @@ pub struct PerpOrderModel {
 }
 
 impl PerpOrderModel {
-    /// Create alphasec-style transaction bytes (0x41 + JSON)
-    /// price and quantity are serialized as raw JSON numbers for Go big.Int compat
+    /// Create alphasec-style transaction bytes (0x41 + JSON).
+    ///
+    /// price and quantity are `String` fields holding the human-readable decimal value, so
+    /// standard serde emits them as quoted strings (the node scales 1e18 internally).
     pub fn to_wire(&self) -> Result<Vec<u8>, serde_json::Error> {
         let mut final_tx_bytes = vec![DEX_COMMAND_PERP_ORDER];
-        // Manual JSON construction to emit price/quantity as raw numbers
-        let json = self.to_json_raw_numbers();
-        final_tx_bytes.extend_from_slice(json.as_bytes());
+        final_tx_bytes.extend_from_slice(&serde_json::to_vec(self)?);
         Ok(final_tx_bytes)
-    }
-
-    /// Produce JSON with price and quantity as unquoted numbers
-    fn to_json_raw_numbers(&self) -> String {
-        let mut obj = serde_json::Map::new();
-        obj.insert(
-            "l1owner".to_string(),
-            serde_json::Value::String(self.l1owner.clone()),
-        );
-        obj.insert(
-            "marketId".to_string(),
-            serde_json::Value::Number(self.market_id.into()),
-        );
-        obj.insert(
-            "side".to_string(),
-            serde_json::Value::Number(self.side.into()),
-        );
-        obj.insert(
-            "isReduceOnly".to_string(),
-            serde_json::Value::Bool(self.is_reduce_only),
-        );
-        obj.insert(
-            "timeInForce".to_string(),
-            serde_json::Value::Number(self.time_in_force.into()),
-        );
-        if let Some(ref coid) = self.client_order_id {
-            obj.insert(
-                "clientOrderId".to_string(),
-                serde_json::Value::String(coid.clone()),
-            );
-        }
-
-        // Serialize the base object, then inject price/quantity as raw numbers
-        let mut json_str = serde_json::to_string(&obj).unwrap();
-        // Remove trailing '}'
-        json_str.pop();
-        // Append price and quantity as raw (unquoted) numbers
-        json_str.push_str(&format!(
-            ",\"price\":{},\"quantity\":{}}}",
-            self.price, self.quantity
-        ));
-        json_str
     }
 }
 
@@ -166,10 +124,10 @@ pub struct PerpModifyModel {
     pub market_id: u64,
     #[serde(rename = "orderId")]
     pub order_id: String,
-    /// New price as 18-decimal big.Int string. None → key omitted → server inherits.
+    /// New price as human-readable decimal (quoted on wire; node scales 1e18). None omits the key (server inherits).
     #[serde(rename = "newPrice", skip_serializing_if = "Option::is_none")]
     pub new_price: Option<String>,
-    /// New quantity as 18-decimal big.Int string. None → key omitted → server inherits.
+    /// New quantity as human-readable decimal (quoted on wire; node scales 1e18). None omits the key (server inherits).
     #[serde(rename = "newQuantity", skip_serializing_if = "Option::is_none")]
     pub new_quantity: Option<String>,
     #[serde(rename = "clientOrderId", skip_serializing_if = "Option::is_none")]
@@ -179,51 +137,13 @@ pub struct PerpModifyModel {
 impl PerpModifyModel {
     /// Create alphasec-style transaction bytes (0x4A + JSON).
     ///
-    /// newPrice and newQuantity are serialized as raw JSON numbers for Go big.Int compat.
-    /// None fields are omitted entirely so the server inherits the original order value.
+    /// newPrice and newQuantity are `Option<String>` holding the human-readable decimal value
+    /// (quoted on wire; the node scales 1e18). `skip_serializing_if = "Option::is_none"` omits
+    /// a None field entirely so the server inherits the original order value.
     pub fn to_wire(&self) -> Result<Vec<u8>, serde_json::Error> {
         let mut final_tx_bytes = vec![DEX_COMMAND_PERP_MODIFY];
-        let json = self.to_json_raw_numbers();
-        final_tx_bytes.extend_from_slice(json.as_bytes());
+        final_tx_bytes.extend_from_slice(&serde_json::to_vec(self)?);
         Ok(final_tx_bytes)
-    }
-
-    /// Produce JSON with newPrice and newQuantity as unquoted numbers (when present).
-    fn to_json_raw_numbers(&self) -> String {
-        let mut obj = serde_json::Map::new();
-        obj.insert(
-            "l1owner".to_string(),
-            serde_json::Value::String(self.l1owner.clone()),
-        );
-        obj.insert(
-            "marketId".to_string(),
-            serde_json::Value::Number(self.market_id.into()),
-        );
-        obj.insert(
-            "orderId".to_string(),
-            serde_json::Value::String(self.order_id.clone()),
-        );
-        if let Some(ref coid) = self.client_order_id {
-            obj.insert(
-                "clientOrderId".to_string(),
-                serde_json::Value::String(coid.clone()),
-            );
-        }
-
-        // Serialize base object (without raw-number fields)
-        let mut json_str = serde_json::to_string(&obj).unwrap();
-        // Remove trailing '}' then splice raw-number fields
-        json_str.pop();
-
-        if let Some(ref price) = self.new_price {
-            json_str.push_str(&format!(",\"newPrice\":{}", price));
-        }
-        if let Some(ref qty) = self.new_quantity {
-            json_str.push_str(&format!(",\"newQuantity\":{}", qty));
-        }
-
-        json_str.push('}');
-        json_str
     }
 }
 

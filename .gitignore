@@ -1,2 +1,11 @@
 target/
 .vscode/
+
+.omc/
+CLAUDE.md
+docs/
+
+# Local credentials for perp e2e / examples (never commit real keys)
+.env
+# Local-only env template (kept out of the public release)
+.env.example

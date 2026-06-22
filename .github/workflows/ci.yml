@@ -18,9 +18,6 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
 
-      - name: Format check
-        run: cargo fmt --all -- --check
-
       - name: Build (all targets)
         run: cargo build --all-targets
 

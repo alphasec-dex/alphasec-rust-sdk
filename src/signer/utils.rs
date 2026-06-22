@@ -10,7 +10,7 @@ use crate::AlphaSecError;
 /// Rejects negative values. Returns an error on overflow (value too large for
 /// the checked multiply path).
 ///
-/// Assumption: all perp tokens use flat ×10^18 scaling (see design §가정).
+/// Assumption: all perp tokens use flat 1e18 scaling.
 pub fn perp_scale(value: Decimal) -> Result<String, AlphaSecError> {
     if value.is_sign_negative() {
         return Err(AlphaSecError::invalid_parameter(

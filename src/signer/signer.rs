@@ -397,7 +397,8 @@ impl AlphaSecSigner {
 
     /// Create perp order data (0x41)
     ///
-    /// price and quantity are Decimal values; internally scaled ×10^18 via perp_scale.
+    /// price and quantity are Decimal values emitted as human-readable decimal strings
+    /// (quoted on wire; the node scales 1e18 internally). Negative values are rejected.
     pub fn create_perp_order_data(
         &self,
         market_id: u64,
@@ -409,12 +410,18 @@ impl AlphaSecSigner {
         client_order_id: Option<&str>,
     ) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpOrderModel;
+        // Reject negative price/quantity client-side (symmetric with the deposit/withdraw guard).
+        if price.is_sign_negative() || quantity.is_sign_negative() {
+            return Err(AlphaSecError::invalid_parameter(
+                "price and quantity cannot be negative",
+            ));
+        }
         let model = PerpOrderModel {
             l1owner: self.l1_address().to_string(),
             market_id,
             side,
-            price: crate::signer::perp_scale(price)?,
-            quantity: crate::signer::perp_scale(quantity)?,
+            price: price.normalize().to_string(),
+            quantity: quantity.normalize().to_string(),
             is_reduce_only,
             time_in_force,
             client_order_id: client_order_id.map(|s| s.to_string()),
@@ -465,7 +472,7 @@ impl AlphaSecSigner {
     /// Create perp modify order data (0x4A) — cancel-and-replace
     ///
     /// new_price/new_quantity are Option<Decimal>: None means omit the key (server inherits).
-    /// Some(value) is scaled ×10^18 via perp_scale and emitted as a raw JSON number.
+    /// Some(value) is emitted as a human-readable decimal string (quoted on wire; node scales 1e18).
     pub fn create_perp_modify_data(
         &self,
         market_id: u64,
@@ -475,12 +482,20 @@ impl AlphaSecSigner {
         client_order_id: Option<&str>,
     ) -> Result<Vec<u8>> {
         use crate::signer::perp_transaction::PerpModifyModel;
+        // Reject negative newPrice/newQuantity client-side (symmetric with order + deposit/withdraw).
+        if matches!(new_price, Some(p) if p.is_sign_negative())
+            || matches!(new_quantity, Some(q) if q.is_sign_negative())
+        {
+            return Err(AlphaSecError::invalid_parameter(
+                "newPrice and newQuantity cannot be negative",
+            ));
+        }
         let model = PerpModifyModel {
             l1owner: self.l1_address().to_string(),
             market_id,
             order_id: order_id.to_string(),
-            new_price: new_price.map(crate::signer::perp_scale).transpose()?,
-            new_quantity: new_quantity.map(crate::signer::perp_scale).transpose()?,
+            new_price: new_price.map(|v| v.normalize().to_string()),
+            new_quantity: new_quantity.map(|v| v.normalize().to_string()),
             client_order_id: client_order_id.map(|s| s.to_string()),
         };
         model
@@ -1317,8 +1332,8 @@ mod tests {
         let result = signer.create_perp_order_data(
             1,                                     // market_id
             0,                                     // side: Buy
-            Decimal::from_str("42000.5").unwrap(), // price: 42000.5 → 42000500000000000000000 in 18dec
-            Decimal::from_str("0.01").unwrap(),    // quantity: 0.01 → 10000000000000000 in 18dec
+            Decimal::from_str("42000.5").unwrap(), // price: human decimal, quoted on wire as "42000.5"
+            Decimal::from_str("0.01").unwrap(), // quantity: human decimal, quoted on wire as "0.01"
             false,
             2, // POST
             Some("coid-abc"),
@@ -1345,8 +1360,8 @@ mod tests {
         let result = signer.create_perp_order_data(
             7,
             1,                                  // side: Sell
-            Decimal::from_str("2000").unwrap(), // price: 2000 → 2000000000000000000000 in 18dec
-            Decimal::from_str("0.5").unwrap(),  // quantity: 0.5 → 500000000000000000 in 18dec
+            Decimal::from_str("2000").unwrap(), // price: human decimal, quoted on wire as "2000"
+            Decimal::from_str("0.5").unwrap(),  // quantity: human decimal, quoted on wire as "0.5"
             true,
             1, // IOC
             Some("order-xyz"),
@@ -1368,16 +1383,16 @@ mod tests {
         assert_eq!(json["isReduceOnly"], true);
         assert_eq!(json["timeInForce"], 1u8);
         assert_eq!(json["clientOrderId"], "order-xyz");
-        // price/quantity are raw numbers for Go big.Int compat — check raw bytes
+        // price/quantity are quoted human-readable decimal strings on the wire
         let raw_json = std::str::from_utf8(&data[1..]).unwrap();
         assert!(
-            raw_json.contains("\"price\":2000000000000000000000"),
-            "price must be raw number, got: {}",
+            raw_json.contains("\"price\":\"2000\""),
+            "price must be a quoted human decimal, got: {}",
             raw_json
         );
         assert!(
-            raw_json.contains("\"quantity\":500000000000000000"),
-            "qty must be raw number, got: {}",
+            raw_json.contains("\"quantity\":\"0.5\""),
+            "qty must be a quoted human decimal, got: {}",
             raw_json
         );
     }
@@ -1390,8 +1405,8 @@ mod tests {
         let result = signer.create_perp_order_data(
             1,
             0,
-            Decimal::from_str("1000").unwrap(), // price: 1000 → 1000000000000000000000
-            Decimal::from_str("0.1").unwrap(),  // quantity: 0.1 → 100000000000000000
+            Decimal::from_str("1000").unwrap(), // price: human decimal, quoted on wire as "1000"
+            Decimal::from_str("0.1").unwrap(),  // quantity: human decimal, quoted on wire as "0.1"
             false,
             0,
             None,
@@ -1534,8 +1549,8 @@ mod tests {
             l1owner: "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266".to_string(),
             market_id: 1,
             side: 0,
-            price: "1000000000000000000000".to_string(),
-            quantity: "100000000000000000".to_string(),
+            price: "1000".to_string(),
+            quantity: "0.1".to_string(),
             is_reduce_only: false,
             time_in_force: 2,
             client_order_id: Some("my-coid".to_string()),
@@ -1735,10 +1750,10 @@ mod tests {
         assert_eq!(data[0], 0x4A, "first byte must be 0x4A (PERP_MODIFY)");
 
         let json = std::str::from_utf8(&data[1..]).unwrap();
-        // newPrice must appear as a raw (unquoted) number
+        // newPrice must appear as a quoted human-readable decimal string
         assert!(
-            json.contains("\"newPrice\":91000000000000000000000"),
-            "newPrice must be raw number, got: {}",
+            json.contains("\"newPrice\":\"91000\""),
+            "newPrice must be a quoted human decimal, got: {}",
             json
         );
         // None fields must not appear as keys
@@ -1829,7 +1844,7 @@ mod tests {
     }
 
     #[test]
-    fn test_perp_modify_camel_case_field_names_and_raw_quantity() {
+    fn test_perp_modify_camel_case_field_names_and_quoted_quantity() {
         let config = create_test_config();
         let signer = AlphaSecSigner::new(config);
 
@@ -1838,8 +1853,8 @@ mod tests {
             .create_perp_modify_data(
                 9,
                 "0xMODID",
-                Some(Decimal::from_str("2000").unwrap()), // → 2000000000000000000000
-                Some(Decimal::from_str("0.5").unwrap()),  // → 500000000000000000
+                Some(Decimal::from_str("2000").unwrap()), // newPrice: quoted on wire as "2000"
+                Some(Decimal::from_str("0.5").unwrap()),  // newQuantity: quoted on wire as "0.5"
                 Some("c-1"),
             )
             .unwrap();
@@ -1881,15 +1896,15 @@ mod tests {
             "snake_case client_order_id must not appear"
         );
 
-        // newQuantity must be a raw (unquoted) number, like newPrice.
+        // newQuantity and newPrice must be quoted human-readable decimal strings.
         assert!(
-            raw.contains("\"newQuantity\":500000000000000000"),
-            "newQuantity must be a raw number, got: {}",
+            raw.contains("\"newQuantity\":\"0.5\""),
+            "newQuantity must be a quoted human decimal, got: {}",
             raw
         );
         assert!(
-            raw.contains("\"newPrice\":2000000000000000000000"),
-            "newPrice must be a raw number, got: {}",
+            raw.contains("\"newPrice\":\"2000\""),
+            "newPrice must be a quoted human decimal, got: {}",
             raw
         );
     }
